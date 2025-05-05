@@ -336,8 +336,7 @@ void LatticeGaussSampUtility<Element>::SampleMat(const Matrix<Field2n>& A, const
         dEval.SetFormat(Format::COEFFICIENT);
         c1(0, 0) = C(d - 1, 0);
         c0       = C.ExtractRows(0, d - 2);
-
-        q1 = ZSampleF(dEval, c1(0, 0), dgg, dEval.Size());
+        q1       = ZSampleF(dEval, c1(0, 0), dgg, dEval.Size());
 
         Dinverse(0, 0) = D(0, 0).Inverse();
 
@@ -396,7 +395,9 @@ void LatticeGaussSampUtility<Element>::SampleMat(const Matrix<Field2n>& A, const
         Dinverse = (D.CofactorMatrix()).Transpose() * detInverse;
     }
 
-    Matrix<Field2n> sigma = A - B * Dinverse * (B.Transpose());
+    Matrix<Field2n> BDinv   = B * Dinverse;
+    Matrix<Field2n> BDinvBt = BDinv * (B.Transpose());
+    Matrix<Field2n> sigma   = A - BDinvBt;
 
     Matrix<Field2n> diff = qF1 - c1;
     diff.SetFormat(Format::EVALUATION);
@@ -426,13 +427,11 @@ void LatticeGaussSampUtility<Element>::SampleMat(const Matrix<Field2n>& A, const
             newD(i, j) = sigma(i + newDimA, j + newDimA);
 
     auto q0 = std::make_shared<Matrix<int64_t>>([]() { return 0; }, n * dimA, 1);
-
     SampleMat(newA, newB, newD, cNew, dgg, q0);
 
     *p = *q0;
 
     p->VStack(*q1);
-
     return;
 }
 
@@ -444,8 +443,15 @@ std::shared_ptr<Matrix<int64_t>> LatticeGaussSampUtility<Element>::ZSampleF(cons
                                                                             const typename Element::DggType& dgg,
                                                                             size_t n) {
     if (f.Size() == 1) {
-        auto p     = std::make_shared<Matrix<int64_t>>([]() { return 0; }, 1, 1);
-        (*p)(0, 0) = dgg.GenerateIntegerKarney(c[0].real(), sqrt(f[0].real()));
+        auto p          = std::make_shared<Matrix<int64_t>>([]() { return 0; }, 1, 1);
+        double variance = f[0].real();
+        // Debug output to check the variance before sqrt
+        if (variance < 0) {
+            OPENFHE_THROW("ZSampleF: Variance is negative, cannot compute sqrt.");
+        }
+        double stddev = sqrt(variance);
+        // Debug output to check the standard deviation
+        (*p)(0, 0) = dgg.GenerateIntegerKarney(c[0].real(), stddev);
         return p;
     }
 

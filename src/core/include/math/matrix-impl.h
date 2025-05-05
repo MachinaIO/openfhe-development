@@ -163,79 +163,47 @@ void Matrix<Element>::Determinant(Element* determinant) const {
     if (rows == 1) {
         *determinant = data[0][0];
     }
+    else if (rows == 2) {
+        *determinant = data[0][0] * (data[1][1]) - data[1][0] * (data[0][1]);
+    }
+    else {
+        size_t j1, j2;
+        size_t n = rows;
 
-    // ---------- recursive SB -----------------------------------------
-    std::function<std::vector<Element>(const Matrix<Element>&)> CharPoly;
-    CharPoly = [&](const Matrix<Element>& M) -> std::vector<Element> {
-        size_t n = M.GetRows();
-        std::cout << "Inside CharPoly with size " << n << std::endl;
-        if (n == 1)
-            return {1, -M(0, 0)};
+        Matrix<Element> result(allocZero, rows - 1, cols - 1);
 
-        size_t k  = n - 1;
-        Element a = M(0, 0);
-        Matrix<Element> R(this->allocZero, 1, k), C(this->allocZero, k, 1), B(this->allocZero, k, k);
+        // for each column in sub-matrix
+        for (j1 = 0; j1 < n; j1++) {
+            // build sub-matrix with minor elements excluded
+            for (size_t i = 1; i < n; i++) {
+                j2 = 0;  // start at first sum-matrix column position
+                // loop to copy source matrix less one column
+                for (size_t j = 0; j < n; j++) {
+                    if (j == j1)
+                        continue;  // don't copy the minor column element
 
-        for (size_t j = 1; j < n; ++j)
-            R(0, j - 1) = M(0, j);
-        for (size_t i = 1; i < n; ++i)
-            C(i - 1, 0) = M(i, 0);
-        for (size_t i = 1; i < n; ++i)
-            for (size_t j = 1; j < n; ++j)
-                B(i - 1, j - 1) = M(i, j);
-        std::cout << "R,C,B " << n << std::endl;
-
-        auto beta = CharPoly(B);
-        std::cout << "beta computed " << n << std::endl;
-
-        std::vector<Element> S(k, this->allocZero());
-        Matrix<Element> Bp(this->allocZero, k, k);
-        Bp = Bp.Identity();
-        std::cout << "Bp identity " << n << std::endl;
-        for (size_t i = 0; i < k; ++i) {
-            if (i > 0)
-                Bp = Bp * B;
-            std::cout << "before mul " << n << std::endl;
-            Matrix<Element> muled1 = Bp * C;
-            std::cout << "after mul " << n << std::endl;
-            Matrix<Element> muled = R * muled1;
-            std::cout << "muled " << n << std::endl;
-            Element muled0 = muled(0, 0);
-            S[i]           = muled0;
-            std::cout << "S[" << i << "] " << n << std::endl;
-        }
-        std::cout << "Bp " << n << std::endl;
-
-        std::cout << "before c init " << n << std::endl;
-        std::vector<Element> c(n + 1, this->allocZero());
-        std::cout << "c init " << n << std::endl;
-        c[0] = 1;
-        std::cout << "c[0] " << n << std::endl;
-        for (size_t m = 1; m <= n; ++m) {
-            Element term = -(a * beta[m - 1]);
-            std::cout << "term init " << n << m << std::endl;
-            if (m < beta.size())
-                term += beta[m];
-            std::cout << "term beta added " << n << m << std::endl;
-            if (m >= 2) {
-                Element acc = this->allocZero();
-                for (size_t i = 0; i <= m - 2; ++i)
-                    acc += S[i] * beta[m - 2 - i];
-                term -= acc;
-                std::cout << "term beta acc " << n << m << std::endl;
+                    // copy source element into new sub-matrix i-1 because new sub-matrix
+                    // is one row (and column) smaller with excluded minors
+                    result.data[i - 1][j2] = data[i][j];
+                    j2++;  // move to next sub-matrix column position
+                }
             }
-            c[m] = term;
-            std::cout << "c[m] " << n << m << std::endl;
-        }
-        std::cout << "c " << n << std::endl;
-        return c;
-    };
 
-    auto coeff  = CharPoly(*this);
-    Element det = coeff[rows];
-    if (rows & 1)
-        det = -det;
-    *determinant = det;
+            auto tempDeterminant(allocZero());
+            result.Determinant(&tempDeterminant);
+
+            if (j1 % 2 == 0)
+                *determinant = *determinant + (data[0][j1]) * tempDeterminant;
+            else
+                *determinant = *determinant - (data[0][j1]) * tempDeterminant;
+
+            // if (j1 % 2 == 0)
+            //  determinant = determinant + (*data[0][j1]) *
+            // result.Determinant(); else   determinant = determinant -
+            // (*data[0][j1]) * result.Determinant();
+        }
+    }
+    // return determinant;
     return;
 }
 
@@ -369,6 +337,8 @@ Matrix<Element> Matrix<Element>::MultByRandomVector(std::vector<int> ranvec) con
     }
     return result;
 }
+
+// Template specialization for Matrix<Field2n>::Determinant is implemented in src/core/lib/math/matrix.cpp
 
 }  // namespace lbcrypto
 
