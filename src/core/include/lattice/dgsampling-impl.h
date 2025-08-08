@@ -387,12 +387,104 @@ void LatticeGaussSampUtility<Element>::SampleMat(const Matrix<Field2n>& A, const
         for (size_t i = 0; i < dimD; i++)
             qF1(i, 0) = Field2n(q1->ExtractRows(i * n, i * n + n - 1));
 
-        Field2n det(n, Format::EVALUATION, true);
-        D.Determinant(&det);
+        // Compute Dinverse in O(n^3) using LU decomposition with partial pivoting.
+        // We solve A X = I by first computing L and U (with row permutations),
+        // then performing forward/backward substitution for each column of I.
 
-        Field2n detInverse = det.Inverse();
+        // Helper lambda: compute squared norm of a Field2n element for pivoting
+        auto field2nNorm2 = [](const Field2n& x) -> double {
+            double s = 0.0;
+            for (size_t t = 0; t < x.Size(); ++t) {
+                const auto& z = x[t];
+                s += z.real() * z.real() + z.imag() * z.imag();
+            }
+            return s;
+        };
 
-        Dinverse = (D.CofactorMatrix()).Transpose() * detInverse;
+        // Make a working copy of D in evaluation format
+        Matrix<Field2n> A([&]() { return Field2n(n, Format::EVALUATION, true); }, dimD, dimD);
+        for (size_t i = 0; i < dimD; ++i) {
+            for (size_t j = 0; j < dimD; ++j) {
+                A(i, j) = D(i, j);
+            }
+        }
+        A.SetFormat(Format::EVALUATION);
+
+        // Prepare permutation vector for partial pivoting
+        std::vector<size_t> piv(dimD);
+        for (size_t i = 0; i < dimD; ++i)
+            piv[i] = i;
+
+        // LU decomposition in-place: A becomes L (unit diagonal, below diag) and U (on/above diag)
+        for (size_t k = 0; k < dimD; ++k) {
+            // Find pivot row with maximum norm in column k
+            size_t pivRow = k;
+            double maxNorm = field2nNorm2(A(k, k));
+            for (size_t r = k + 1; r < dimD; ++r) {
+                double nn = field2nNorm2(A(r, k));
+                if (nn > maxNorm) {
+                    maxNorm = nn;
+                    pivRow  = r;
+                }
+            }
+            if (maxNorm == 0.0) {
+                OPENFHE_THROW("Matrix is singular in LU inversion.");
+            }
+            if (pivRow != k) {
+                for (size_t j = 0; j < dimD; ++j) {
+                    std::swap(A(k, j), A(pivRow, j));
+                }
+                std::swap(piv[k], piv[pivRow]);
+            }
+
+            // Compute multipliers and eliminate below pivot
+            Field2n pivotInv = A(k, k).Inverse();
+            for (size_t i = k + 1; i < dimD; ++i) {
+                // L(i,k) = A(i,k) / A(k,k)
+                A(i, k) = A(i, k) * pivotInv;
+                Field2n lik = A(i, k);
+                // Update trailing submatrix
+                for (size_t j = k + 1; j < dimD; ++j) {
+                    A(i, j) = A(i, j) - lik * A(k, j);
+                }
+            }
+        }
+
+        // Initialize Dinverse container (evaluation format)
+        Dinverse = Matrix<Field2n>([&]() { return Field2n(n, Format::EVALUATION, true); }, dimD, dimD);
+        Field2n one(n, Format::EVALUATION, true);
+        for (size_t t = 0; t < n; ++t) one[t] = std::complex<double>(1.0, 0.0);
+        Field2n zero(n, Format::EVALUATION, true);  // already zeros
+
+        // Solve for each column of the inverse
+        std::vector<Field2n> y(dimD, zero);
+        std::vector<Field2n> x(dimD, zero);
+        for (size_t col = 0; col < dimD; ++col) {
+            // b = P * e_col (apply permutation to RHS)
+            // Forward substitution: L y = b
+            for (size_t i = 0; i < dimD; ++i) {
+                Field2n sum = (piv[i] == col) ? one : zero;
+                for (size_t k = 0; k < i; ++k) {
+                    sum = sum - A(i, k) * y[k];
+                }
+                y[i] = sum;  // since L has unit diagonal
+            }
+
+            // Backward substitution: U x = y
+            for (int i = static_cast<int>(dimD) - 1; i >= 0; --i) {
+                Field2n sum = y[static_cast<size_t>(i)];
+                for (size_t k = static_cast<size_t>(i) + 1; k < dimD; ++k) {
+                    sum = sum - A(static_cast<size_t>(i), k) * x[k];
+                }
+                Field2n uInv = A(static_cast<size_t>(i), static_cast<size_t>(i)).Inverse();
+                x[static_cast<size_t>(i)] = sum * uInv;
+            }
+
+            // Write solution as the col-th column of the inverse
+            for (size_t i = 0; i < dimD; ++i) {
+                Dinverse(i, col) = x[i];
+            }
+        }
     }
 
     Matrix<Field2n> BDinv   = B * Dinverse;
