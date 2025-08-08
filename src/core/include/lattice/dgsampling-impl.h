@@ -43,6 +43,8 @@
 #include "utils/inttypes.h"
 #include "utils/parallel.h"
 
+#include <iostream>
+
 #include <memory>
 #include <vector>
 
@@ -391,6 +393,10 @@ void LatticeGaussSampUtility<Element>::SampleMat(const Matrix<Field2n>& A, const
         // We solve A X = I by first computing L and U (with row permutations),
         // then performing forward/backward substitution for each column of I.
 
+        // Print progress information using standard C++ output streams.
+        std::cout << "[LU] Starting inversion via LU decomposition" << std::endl;
+        std::cout << "[LU] dimD=" << dimD << ", n=" << n << std::endl;
+
         // Helper lambda: compute squared norm of a Field2n element for pivoting
         auto field2nNorm2 = [](const Field2n& x) -> double {
             double s = 0.0;
@@ -431,6 +437,7 @@ void LatticeGaussSampUtility<Element>::SampleMat(const Matrix<Field2n>& A, const
                 OPENFHE_THROW("Matrix is singular in LU inversion.");
             }
             if (pivRow != k) {
+                std::cout << "[LU] Pivot swap: k=" << k << ", pivRow=" << pivRow << std::endl;
                 for (size_t j = 0; j < dimD; ++j) {
                     std::swap(A(k, j), A(pivRow, j));
                 }
@@ -439,7 +446,10 @@ void LatticeGaussSampUtility<Element>::SampleMat(const Matrix<Field2n>& A, const
 
             // Compute multipliers and eliminate below pivot
             Field2n pivotInv = A(k, k).Inverse();
-            for (size_t i = k + 1; i < dimD; ++i) {
+            // Parallelize elimination for rows below the pivot (independent per row)
+#pragma omp parallel for
+            for (long ii = static_cast<long>(k) + 1; ii < static_cast<long>(dimD); ++ii) {
+                size_t i = static_cast<size_t>(ii);
                 // L(i,k) = A(i,k) / A(k,k)
                 A(i, k) = A(i, k) * pivotInv;
                 Field2n lik = A(i, k);
@@ -449,6 +459,7 @@ void LatticeGaussSampUtility<Element>::SampleMat(const Matrix<Field2n>& A, const
                 }
             }
         }
+        std::cout << "[LU] Decomposition complete. Solving for inverse columns..." << std::endl;
 
         // Initialize Dinverse container (evaluation format)
         Dinverse = Matrix<Field2n>([&]() { return Field2n(n, Format::EVALUATION, true); }, dimD, dimD);
@@ -457,9 +468,13 @@ void LatticeGaussSampUtility<Element>::SampleMat(const Matrix<Field2n>& A, const
         Field2n zero(n, Format::EVALUATION, true);  // already zeros
 
         // Solve for each column of the inverse
-        std::vector<Field2n> y(dimD, zero);
-        std::vector<Field2n> x(dimD, zero);
-        for (size_t col = 0; col < dimD; ++col) {
+        // Solve each right-hand side in parallel since columns are independent
+#pragma omp parallel for
+        for (long colL = 0; colL < static_cast<long>(dimD); ++colL) {
+            size_t col = static_cast<size_t>(colL);
+            std::cout << "[LU] Solving column " << col << std::endl;
+            std::vector<Field2n> y(dimD, zero);
+            std::vector<Field2n> x(dimD, zero);
             // b = P * e_col (apply permutation to RHS)
             // Forward substitution: L y = b
             for (size_t i = 0; i < dimD; ++i) {
@@ -484,7 +499,9 @@ void LatticeGaussSampUtility<Element>::SampleMat(const Matrix<Field2n>& A, const
             for (size_t i = 0; i < dimD; ++i) {
                 Dinverse(i, col) = x[i];
             }
+            std::cout << "[LU] Finished column " << col << std::endl;
         }
+        std::cout << "[LU] Inversion via LU completed." << std::endl;
     }
 
     Matrix<Field2n> BDinv   = B * Dinverse;
