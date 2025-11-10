@@ -336,8 +336,7 @@ void LatticeGaussSampUtility<Element>::SampleMat(const Matrix<Field2n>& A, const
         dEval.SetFormat(Format::COEFFICIENT);
         c1(0, 0) = C(d - 1, 0);
         c0       = C.ExtractRows(0, d - 2);
-
-        q1 = ZSampleF(dEval, c1(0, 0), dgg, dEval.Size());
+        q1       = ZSampleF(dEval, c1(0, 0), dgg, dEval.Size());
 
         Dinverse(0, 0) = D(0, 0).Inverse();
 
@@ -388,15 +387,119 @@ void LatticeGaussSampUtility<Element>::SampleMat(const Matrix<Field2n>& A, const
         for (size_t i = 0; i < dimD; i++)
             qF1(i, 0) = Field2n(q1->ExtractRows(i * n, i * n + n - 1));
 
-        Field2n det(n, Format::EVALUATION, true);
-        D.Determinant(&det);
+        // Compute Dinverse in O(n^3) using LU decomposition with partial pivoting.
+        // We solve A X = I by first computing L and U (with row permutations),
+        // then performing forward/backward substitution for each column of I.
 
-        Field2n detInverse = det.Inverse();
+        // Start LU-based inversion
 
-        Dinverse = (D.CofactorMatrix()).Transpose() * detInverse;
+        // Helper lambda: compute squared norm of a Field2n element for pivoting
+        auto field2nNorm2 = [](const Field2n& x) -> double {
+            double s = 0.0;
+            for (size_t t = 0; t < x.Size(); ++t) {
+                const auto& z = x[t];
+                s += z.real() * z.real() + z.imag() * z.imag();
+            }
+            return s;
+        };
+
+        // Make a working copy of D in evaluation format
+        Matrix<Field2n> A([&]() { return Field2n(n, Format::EVALUATION, true); }, dimD, dimD);
+        for (size_t i = 0; i < dimD; ++i) {
+            for (size_t j = 0; j < dimD; ++j) {
+                A(i, j) = D(i, j);
+            }
+        }
+        A.SetFormat(Format::EVALUATION);
+
+        // Prepare permutation vector for partial pivoting
+        std::vector<size_t> piv(dimD);
+        for (size_t i = 0; i < dimD; ++i)
+            piv[i] = i;
+
+        // LU decomposition in-place: A becomes L (unit diagonal, below diag) and U (on/above diag)
+        for (size_t k = 0; k < dimD; ++k) {
+            // Find pivot row with maximum norm in column k
+            size_t pivRow = k;
+            double maxNorm = field2nNorm2(A(k, k));
+            for (size_t r = k + 1; r < dimD; ++r) {
+                double nn = field2nNorm2(A(r, k));
+                if (nn > maxNorm) {
+                    maxNorm = nn;
+                    pivRow  = r;
+                }
+            }
+            if (maxNorm == 0.0) {
+                OPENFHE_THROW("Matrix is singular in LU inversion.");
+            }
+            if (pivRow != k) {
+                for (size_t j = 0; j < dimD; ++j) {
+                    std::swap(A(k, j), A(pivRow, j));
+                }
+                std::swap(piv[k], piv[pivRow]);
+            }
+
+            // Compute multipliers and eliminate below pivot
+            Field2n pivotInv = A(k, k).Inverse();
+            // Parallelize elimination for rows below the pivot (independent per row)
+#pragma omp parallel for
+            for (long ii = static_cast<long>(k) + 1; ii < static_cast<long>(dimD); ++ii) {
+                size_t i = static_cast<size_t>(ii);
+                // L(i,k) = A(i,k) / A(k,k)
+                A(i, k) = A(i, k) * pivotInv;
+                Field2n lik = A(i, k);
+                // Update trailing submatrix
+                for (size_t j = k + 1; j < dimD; ++j) {
+                    A(i, j) = A(i, j) - lik * A(k, j);
+                }
+            }
+        }
+        // Decomposition complete. Solve for inverse columns.
+
+        // Initialize Dinverse container (evaluation format)
+        Dinverse = Matrix<Field2n>([&]() { return Field2n(n, Format::EVALUATION, true); }, dimD, dimD);
+        Field2n one(n, Format::EVALUATION, true);
+        for (size_t t = 0; t < n; ++t) one[t] = std::complex<double>(1.0, 0.0);
+        Field2n zero(n, Format::EVALUATION, true);  // already zeros
+
+        // Solve for each column of the inverse
+        // Solve each right-hand side in parallel since columns are independent
+#pragma omp parallel for
+        for (long colL = 0; colL < static_cast<long>(dimD); ++colL) {
+            size_t col = static_cast<size_t>(colL);
+            std::vector<Field2n> y(dimD, zero);
+            std::vector<Field2n> x(dimD, zero);
+            // b = P * e_col (apply permutation to RHS)
+            // Forward substitution: L y = b
+            for (size_t i = 0; i < dimD; ++i) {
+                Field2n sum = (piv[i] == col) ? one : zero;
+                for (size_t k = 0; k < i; ++k) {
+                    sum = sum - A(i, k) * y[k];
+                }
+                y[i] = sum;  // since L has unit diagonal
+            }
+
+            // Backward substitution: U x = y
+            for (int i = static_cast<int>(dimD) - 1; i >= 0; --i) {
+                Field2n sum = y[static_cast<size_t>(i)];
+                for (size_t k = static_cast<size_t>(i) + 1; k < dimD; ++k) {
+                    sum = sum - A(static_cast<size_t>(i), k) * x[k];
+                }
+                Field2n uInv = A(static_cast<size_t>(i), static_cast<size_t>(i)).Inverse();
+                x[static_cast<size_t>(i)] = sum * uInv;
+            }
+
+            // Write solution as the col-th column of the inverse
+            for (size_t i = 0; i < dimD; ++i) {
+                Dinverse(i, col) = x[i];
+            }
+        }
+        // Inversion via LU completed.
     }
 
-    Matrix<Field2n> sigma = A - B * Dinverse * (B.Transpose());
+    Matrix<Field2n> BDinv   = B * Dinverse;
+    Matrix<Field2n> BDinvBt = BDinv * (B.Transpose());
+    Matrix<Field2n> sigma   = A - BDinvBt;
 
     Matrix<Field2n> diff = qF1 - c1;
     diff.SetFormat(Format::EVALUATION);
@@ -426,13 +529,11 @@ void LatticeGaussSampUtility<Element>::SampleMat(const Matrix<Field2n>& A, const
             newD(i, j) = sigma(i + newDimA, j + newDimA);
 
     auto q0 = std::make_shared<Matrix<int64_t>>([]() { return 0; }, n * dimA, 1);
-
     SampleMat(newA, newB, newD, cNew, dgg, q0);
 
     *p = *q0;
 
     p->VStack(*q1);
-
     return;
 }
 
@@ -444,8 +545,15 @@ std::shared_ptr<Matrix<int64_t>> LatticeGaussSampUtility<Element>::ZSampleF(cons
                                                                             const typename Element::DggType& dgg,
                                                                             size_t n) {
     if (f.Size() == 1) {
-        auto p     = std::make_shared<Matrix<int64_t>>([]() { return 0; }, 1, 1);
-        (*p)(0, 0) = dgg.GenerateIntegerKarney(c[0].real(), sqrt(f[0].real()));
+        auto p          = std::make_shared<Matrix<int64_t>>([]() { return 0; }, 1, 1);
+        double variance = f[0].real();
+        // Debug output to check the variance before sqrt
+        if (variance < 0) {
+            OPENFHE_THROW("ZSampleF: Variance is negative, cannot compute sqrt.");
+        }
+        double stddev = sqrt(variance);
+        // Debug output to check the standard deviation
+        (*p)(0, 0) = dgg.GenerateIntegerKarney(c[0].real(), stddev);
         return p;
     }
 

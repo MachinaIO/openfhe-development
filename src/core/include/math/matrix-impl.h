@@ -338,6 +338,8 @@ Matrix<Element> Matrix<Element>::MultByRandomVector(std::vector<int> ranvec) con
     return result;
 }
 
+// Template specialization for Matrix<Field2n>::Determinant is implemented in src/core/lib/math/matrix.cpp
+
 }  // namespace lbcrypto
 
 #endif

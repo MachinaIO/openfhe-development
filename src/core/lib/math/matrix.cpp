@@ -38,9 +38,11 @@
 
 #include "math/math-hal.h"
 #include "math/matrix-impl.h"
+#include "lattice/field2n.h"
 
 #include "utils/exception.h"
 #include "utils/parallel.h"
+#include <functional>
 
 // this is the implementation of matrixes of things that are in core
 // and that need template specializations
@@ -192,6 +194,104 @@ Matrix<int32_t> ConvertToInt32(const Matrix<BigVector>& input, const BigInteger&
 template class Matrix<double>;
 template class Matrix<int>;
 template class Matrix<int64_t>;
+
+/**
+ * Template specialization for Matrix<Field2n>::Identity().
+ * This provides a correct implementation for setting the identity matrix for Field2n elements.
+ */
+template <>
+Matrix<Field2n>& Matrix<Field2n>::Identity() {
+    for (size_t row = 0; row < rows; ++row) {
+        for (size_t col = 0; col < cols; ++col) {
+            data[row][col] = allocZero();
+            if (row == col) {
+                if (data[row][col].size() > 0) {
+                    data[row][col][0] = std::complex<double>(1.0, 0);
+                }
+            }
+        }
+    }
+    return *this;
+}
+
+/**
+ * Template specialization implementation for Matrix<Field2n>::Determinant
+ * This provides a specialized implementation for computing the determinant of a matrix of Field2n elements
+ */
+template <>
+void Matrix<Field2n>::Determinant(Field2n* determinant) const {
+    if (rows != cols)
+        OPENFHE_THROW("Supported only for square matrix");
+
+    if (rows < 1)
+        OPENFHE_THROW("Dimension should be at least one");
+
+    if (rows == 1) {
+        *determinant = data[0][0];
+        return;
+    }
+
+    Field2n zero = this->allocZero();
+    Field2n one  = this->allocZero();
+    one[0]       = std::complex<double>(1.0, 0);
+
+    // ---------- recursive SB -----------------------------------------
+    std::function<std::vector<Field2n>(const Matrix<Field2n>&)> CharPoly;
+    CharPoly = [&](const Matrix<Field2n>& M) -> std::vector<Field2n> {
+        size_t n = M.GetRows();
+        if (n == 1)
+            return {one, -M(0, 0)};
+
+        size_t k  = n - 1;
+        Field2n a = M(0, 0);
+        Matrix<Field2n> R(this->allocZero, 1, k), C(this->allocZero, k, 1), B(this->allocZero, k, k);
+
+        for (size_t j = 1; j < n; ++j)
+            R(0, j - 1) = M(0, j);
+        for (size_t i = 1; i < n; ++i)
+            C(i - 1, 0) = M(i, 0);
+        for (size_t i = 1; i < n; ++i)
+            for (size_t j = 1; j < n; ++j)
+                B(i - 1, j - 1) = M(i, j);
+
+        auto beta = CharPoly(B);
+
+        std::vector<Field2n> S(k, zero);
+        Matrix<Field2n> Bp = Matrix<Field2n>(this->allocZero, k, k).Identity();
+
+        for (size_t i = 0; i < k; ++i) {
+            if (i > 0)
+                Bp = Bp * B;
+            Matrix<Field2n> muled1 = Bp * C;
+            Matrix<Field2n> muled  = R * muled1;
+            S[i]                   = muled(0, 0);
+            // Debug output for S[i]
+        }
+
+        std::vector<Field2n> c;
+        c.push_back(one);
+        for (size_t m = 1; m <= n; ++m) {
+            Field2n term = -(a * beta[m - 1]);
+            if (m < beta.size())
+                term += beta[m];
+            if (m >= 2) {
+                Field2n acc = zero;
+                for (size_t i = 0; i <= m - 2; ++i)
+                    acc += S[i] * beta[m - 2 - i];
+                term -= acc;
+            }
+            c.push_back(term);
+        }
+        return c;
+    };
+
+    auto coeff  = CharPoly(*this);
+    Field2n det = coeff[rows];
+    if (rows & 1)
+        det = -det;
+    *determinant = det;
+    return;
+}
 
 }  // namespace lbcrypto
 
