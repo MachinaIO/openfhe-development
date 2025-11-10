@@ -57,30 +57,25 @@ protected:
     std::string keyTag;
 
 public:
-    explicit CryptoObject(CryptoContext<Element> cc = nullptr, const std::string& tag = "")
-        : context(cc), keyTag(tag) {}
+    CryptoObject() = default;
 
-    CryptoObject(const CryptoObject& rhs) {
+    explicit CryptoObject(const CryptoContext<Element>& cc, const std::string& tag = "") : context(cc), keyTag(tag) {}
+
+    CryptoObject(const CryptoObject& rhs) = default;
+
+    CryptoObject(CryptoObject&& rhs) noexcept = default;
+
+    virtual ~CryptoObject() = default;
+
+    CryptoObject& operator=(const CryptoObject& rhs) {
         context = rhs.context;
         keyTag  = rhs.keyTag;
-    }
-
-    CryptoObject(const CryptoObject&& rhs) {
-        context = std::move(rhs.context);
-        keyTag  = std::move(rhs.keyTag);
-    }
-
-    virtual ~CryptoObject() {}
-
-    const CryptoObject& operator=(const CryptoObject& rhs) {
-        this->context = rhs.context;
-        this->keyTag  = rhs.keyTag;
         return *this;
     }
 
-    const CryptoObject& operator=(const CryptoObject&& rhs) {
-        this->context = std::move(rhs.context);
-        this->keyTag  = std::move(rhs.keyTag);
+    CryptoObject& operator=(CryptoObject&& rhs) noexcept {
+        context = std::move(rhs.context);
+        keyTag  = std::move(rhs.keyTag);
         return *this;
     }
 
@@ -96,7 +91,7 @@ public:
 
     const EncodingParams GetEncodingParameters() const;
 
-    const std::string GetKeyTag() const {
+    const std::string& GetKeyTag() const {
         return keyTag;
     }
 
@@ -112,13 +107,11 @@ public:
 
     template <class Archive>
     void load(Archive& ar, std::uint32_t const version) {
-        if (version > SerializedVersion()) {
+        if (version > SerializedVersion())
             OPENFHE_THROW("serialized object version " + std::to_string(version) +
                           " is from a later version of the library");
-        }
         ar(::cereal::make_nvp("cc", context));
         ar(::cereal::make_nvp("kt", keyTag));
-
         context = CryptoContextFactory<Element>::GetFullContextByDeserializedContext(context);
     }
 

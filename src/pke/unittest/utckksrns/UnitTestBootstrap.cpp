@@ -33,22 +33,23 @@
   Unit tests for the CKKS scheme
  */
 
-#include "UnitTestUtils.h"
+#include "cryptocontext-ser.h"
+#include "gtest/gtest.h"
+#include "scheme/ckksrns/ckksrns-ser.h"
+#include "scheme/ckksrns/ckksrns-utils.h"
 #include "UnitTestCCParams.h"
 #include "UnitTestCryptoContext.h"
-#include "scheme/ckksrns/ckksrns-utils.h"
-#include "cryptocontext-ser.h"
-#include "scheme/ckksrns/ckksrns-ser.h"
+#include "UnitTestUtils.h"
 
 #include <iostream>
-#include <vector>
-#include "gtest/gtest.h"
 #include <iterator>
+#include <vector>
 
 using namespace lbcrypto;
+using namespace std::literals;
 
 //===========================================================================================================
-enum TEST_CASE_TYPE {
+enum TEST_CASE_TYPE : int {
     BOOTSTRAP_FULL = 0,
     BOOTSTRAP_EDGE,
     BOOTSTRAP_SPARSE,
@@ -56,6 +57,7 @@ enum TEST_CASE_TYPE {
     BOOTSTRAP_ITERATIVE,
     BOOTSTRAP_NUM_TOWERS,
     BOOTSTRAP_SERIALIZE,
+    BOOTSTRAP_SPARSE_ENCAPSULATED,
 };
 
 static std::ostream& operator<<(std::ostream& os, const TEST_CASE_TYPE& type) {
@@ -82,12 +84,16 @@ static std::ostream& operator<<(std::ostream& os, const TEST_CASE_TYPE& type) {
         case BOOTSTRAP_SERIALIZE:
             typeName = "BOOTSTRAP_SERIALIZE";
             break;
+        case BOOTSTRAP_SPARSE_ENCAPSULATED:
+            typeName = "BOOTSTRAP_SPARSE_ENCAPSULATED";
+            break;
         default:
             typeName = "UNKNOWN";
             break;
     }
     return os << typeName;
 }
+
 //===========================================================================================================
 struct TEST_CASE_UTCKKSRNS_BOOT {
     TEST_CASE_TYPE testCaseType;
@@ -123,12 +129,13 @@ static auto testName = [](const testing::TestParamInfo<TEST_CASE_UTCKKSRNS_BOOT>
 static std::ostream& operator<<(std::ostream& os, const TEST_CASE_UTCKKSRNS_BOOT& test) {
     return os << test.toString();
 }
+
 //===========================================================================================================
 constexpr uint32_t MULT_DEPTH   = 25;
 constexpr uint32_t RDIM         = 64;
 constexpr uint32_t NUM_LRG_DIGS = 3;
 
-#if NATIVEINT == 128 && !defined(__EMSCRIPTEN__)
+#if NATIVEINT == 128
 constexpr uint32_t SMODSIZE = 78;
 constexpr uint32_t FMODSIZE = 89;
 #else
@@ -138,188 +145,242 @@ constexpr uint32_t FMODSIZE = 60;
 
 // clang-format off
 static std::vector<TEST_CASE_UTCKKSRNS_BOOT> testCases = {
-    // TestType,     Descr, Scheme,          RDim, MultDepth,  SModSize,     DSize, BatchSz, SecKeyDist,      MaxRelinSkDeg, FModSize,  SecLvl,       KSTech, ScalTech,        LDigits,      PtMod, StdDev, EvalAddCt, KSCt, MultTech, EncTech, PREMode, LvlBudget, Dim1,       Slots
-    { BOOTSTRAP_FULL, "01", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 32, 32 }, RDIM/2 },
-    { BOOTSTRAP_FULL, "02", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 32, 32 }, RDIM/2 },
-    { BOOTSTRAP_FULL, "03", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDMANUAL,     NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 32, 32 }, RDIM/2 },
-    { BOOTSTRAP_FULL, "04", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDMANUAL,     NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 32, 32 }, RDIM/2 },
+    // TestType,     Descr,          Scheme, RDim,  MultDepth, SModSize, DSize, BSize, SecKeyDist, MaxRelinSkDeg, FModSize,       SecLvl, KSTech,        ScalTech,      LDigits, PtMod,StdDev, EvalAddCt, KSCt, MultTech, EncTech, PREMode, MultipartyMode, decryptionNoiseMode, ExecutionMode, NoiseEstimate, RegisterWordSize, CompositeDegree, CKKSDataType, LvlBudget, Dim1,       Slots
+    { BOOTSTRAP_FULL, "01", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 32, 32 }, RDIM/2 },
+    { BOOTSTRAP_FULL, "02", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 32, 32 }, RDIM/2 },
+    { BOOTSTRAP_FULL, "03", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 32, 32 }, RDIM/2 },
+    { BOOTSTRAP_FULL, "04", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 32, 32 }, RDIM/2 },
+    { BOOTSTRAP_FULL, "05", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, COMPLEX},   { 1, 1 },  { 32, 32 }, RDIM/2 },
+    { BOOTSTRAP_FULL, "06", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT, SPARSE_ENCAPSULATED, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 32, 32 }, RDIM/2 },
+    { BOOTSTRAP_FULL, "07", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT, SPARSE_ENCAPSULATED, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 32, 32 }, RDIM/2 },
 #if NATIVEINT != 128
-    { BOOTSTRAP_FULL, "05", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTO,    NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 32, 32 }, RDIM/2 },
-    { BOOTSTRAP_FULL, "06", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTO,    NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 32, 32 }, RDIM/2 },
-    { BOOTSTRAP_FULL, "07", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 32, 32 }, RDIM/2 },
-    { BOOTSTRAP_FULL, "08", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 32, 32 }, RDIM/2 },
+    { BOOTSTRAP_FULL, "08", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 32, 32 }, RDIM/2 },
+    { BOOTSTRAP_FULL, "09", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 32, 32 }, RDIM/2 },
+    { BOOTSTRAP_FULL, "10", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 32, 32 }, RDIM/2 },
+    { BOOTSTRAP_FULL, "11", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 32, 32 }, RDIM/2 },
+    { BOOTSTRAP_FULL, "12", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, COMPLEX},   { 1, 1 },  { 32, 32 }, RDIM/2 },
+    { BOOTSTRAP_FULL, "13", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT, SPARSE_ENCAPSULATED, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 32, 32 }, RDIM/2 },
+    { BOOTSTRAP_FULL, "14", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT, SPARSE_ENCAPSULATED, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 32, 32 }, RDIM/2 },
 #endif
     // ==========================================
-    // TestType,     Descr, Scheme,          RDim, MultDepth,  SModSize,     DSize, BatchSz, SecKeyDist,      MaxRelinSkDeg, FModSize,  SecLvl,       KSTech, ScalTech,        LDigits,      PtMod, StdDev, EvalAddCt, KSCt, MultTech, EncTech, PREMode, LvlBudget, Dim1,     Slots
-    { BOOTSTRAP_FULL, "11", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 3 },  { 0, 0 }, RDIM/2 },
-    { BOOTSTRAP_FULL, "12", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 3 },  { 0, 0 }, RDIM/2 },
-    { BOOTSTRAP_FULL, "13", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDMANUAL,     NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 3 },  { 0, 0 }, RDIM/2 },
-    { BOOTSTRAP_FULL, "14", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDMANUAL,     NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 3 },  { 0, 0 }, RDIM/2 },
+    // TestType,     Descr,          Scheme, RDim,  MultDepth, SModSize, DSize, BSize, SecKeyDist, MaxRelinSkDeg, FModSize,       SecLvl, KSTech,        ScalTech,      LDigits, PtMod,StdDev, EvalAddCt, KSCt, MultTech, EncTech, PREMode, MultipartyMode, decryptionNoiseMode, ExecutionMode, NoiseEstimate, RegisterWordSize, CompositeDegree, CKKSDataType, LvlBudget, Dim1,       Slots
+    { BOOTSTRAP_FULL, "15", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 3 },  { 0, 0 }, RDIM/2 },
+    { BOOTSTRAP_FULL, "16", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 3 },  { 0, 0 }, RDIM/2 },
+    { BOOTSTRAP_FULL, "17", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 3 },  { 0, 0 }, RDIM/2 },
+    { BOOTSTRAP_FULL, "18", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 3 },  { 0, 0 }, RDIM/2 },
+    { BOOTSTRAP_FULL, "19", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, COMPLEX},   { 3, 3 },  { 0, 0 }, RDIM/2 },
+    { BOOTSTRAP_FULL, "20", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT, SPARSE_ENCAPSULATED, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 3 },  { 0, 0 }, RDIM/2 },
+    { BOOTSTRAP_FULL, "21", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT, SPARSE_ENCAPSULATED, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 3 },  { 0, 0 }, RDIM/2 },
 #if NATIVEINT != 128
-    { BOOTSTRAP_FULL, "15", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTO,    NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 3 },  { 0, 0 }, RDIM/2 },
-    { BOOTSTRAP_FULL, "16", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTO,    NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 3 },  { 0, 0 }, RDIM/2 },
-    { BOOTSTRAP_FULL, "17", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 3 },  { 0, 0 }, RDIM/2 },
-    { BOOTSTRAP_FULL, "18", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 3 },  { 0, 0 }, RDIM/2 },
+    { BOOTSTRAP_FULL, "22", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 3 },  { 0, 0 }, RDIM/2 },
+    { BOOTSTRAP_FULL, "23", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 3 },  { 0, 0 }, RDIM/2 },
+    { BOOTSTRAP_FULL, "24", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 3 },  { 0, 0 }, RDIM/2 },
+    { BOOTSTRAP_FULL, "25", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 3 },  { 0, 0 }, RDIM/2 },
+    { BOOTSTRAP_FULL, "26", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, COMPLEX},   { 3, 3 },  { 0, 0 }, RDIM/2 },
+    { BOOTSTRAP_FULL, "27", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT, SPARSE_ENCAPSULATED, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 3 },  { 0, 0 }, RDIM/2 },
+    { BOOTSTRAP_FULL, "28", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT, SPARSE_ENCAPSULATED, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 3 },  { 0, 0 }, RDIM/2 },
 #endif
     // ==========================================
-    // TestType,      Descr, Scheme,          RDim, MultDepth,  SModSize,     DSize, BatchSz, SecKeyDist,      MaxRelinSkDeg, FModSize,  SecLvl,       KSTech, ScalTech,        LDigits,      PtMod, StdDev, EvalAddCt, KSCt, MultTech, EncTech, PREMode, LvlBudget, Dim1,     Slots
-    { BOOTSTRAP_EDGE, "01", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 0, 0 }, RDIM/4 },
-    { BOOTSTRAP_EDGE, "02", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 0, 0 }, RDIM/4 },
-    { BOOTSTRAP_EDGE, "03", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDMANUAL,     NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 0, 0 }, RDIM/4 },
-    { BOOTSTRAP_EDGE, "04", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDMANUAL,     NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 0, 0 }, RDIM/4 },
+    // TestType,     Descr,          Scheme, RDim,  MultDepth, SModSize, DSize, BSize, SecKeyDist, MaxRelinSkDeg, FModSize,       SecLvl, KSTech,        ScalTech,      LDigits, PtMod,StdDev, EvalAddCt, KSCt, MultTech, EncTech, PREMode, MultipartyMode, decryptionNoiseMode, ExecutionMode, NoiseEstimate, RegisterWordSize, CompositeDegree, CKKSDataType, LvlBudget, Dim1,       Slots
+    { BOOTSTRAP_EDGE, "01", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 0, 0 }, RDIM/4 },
+    { BOOTSTRAP_EDGE, "02", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 0, 0 }, RDIM/4 },
+    { BOOTSTRAP_EDGE, "03", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 0, 0 }, RDIM/4 },
+    { BOOTSTRAP_EDGE, "04", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 0, 0 }, RDIM/4 },
+    { BOOTSTRAP_EDGE, "05", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, COMPLEX},   { 1, 1 },  { 0, 0 }, RDIM/4 },
 #if NATIVEINT != 128
-    { BOOTSTRAP_EDGE, "05", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTO,    NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 0, 0 }, RDIM/4 },
-    { BOOTSTRAP_EDGE, "06", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTO,    NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 0, 0 }, RDIM/4 },
-    { BOOTSTRAP_EDGE, "07", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 0, 0 }, RDIM/4 },
-    { BOOTSTRAP_EDGE, "08", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 0, 0 }, RDIM/4 },
+    { BOOTSTRAP_EDGE, "06", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 0, 0 }, RDIM/4 },
+    { BOOTSTRAP_EDGE, "07", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 0, 0 }, RDIM/4 },
+    { BOOTSTRAP_EDGE, "08", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 0, 0 }, RDIM/4 },
+    { BOOTSTRAP_EDGE, "09", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 0, 0 }, RDIM/4 },
+    { BOOTSTRAP_EDGE, "10", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, COMPLEX},   { 1, 1 },  { 0, 0 }, RDIM/4 },
 #endif
     // ==========================================
-    // TestType,      Descr, Scheme,          RDim, MultDepth,  SModSize,     DSize, BatchSz, SecKeyDist,      MaxRelinSkDeg, FModSize,  SecLvl,       KSTech, ScalTech,        LDigits,      PtMod, StdDev, EvalAddCt, KSCt, MultTech, EncTech, PREMode, LvlBudget, Dim1,     Slots
-    { BOOTSTRAP_EDGE, "11", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 2, 2 },  { 0, 0 }, RDIM/4 },
-    { BOOTSTRAP_EDGE, "12", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 2, 2 },  { 0, 0 }, RDIM/4 },
-    { BOOTSTRAP_EDGE, "13", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDMANUAL,     NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 2, 2 },  { 0, 0 }, RDIM/4 },
-    { BOOTSTRAP_EDGE, "14", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDMANUAL,     NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 2, 2 },  { 0, 0 }, RDIM/4 },
+    // TestType,     Descr,          Scheme, RDim,  MultDepth, SModSize, DSize, BSize, SecKeyDist, MaxRelinSkDeg, FModSize,       SecLvl, KSTech,        ScalTech,      LDigits, PtMod,StdDev, EvalAddCt, KSCt, MultTech, EncTech, PREMode, MultipartyMode, decryptionNoiseMode, ExecutionMode, NoiseEstimate, RegisterWordSize, CompositeDegree, CKKSDataType, LvlBudget, Dim1,       Slots
+    { BOOTSTRAP_EDGE, "11", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 2, 2 },  { 0, 0 }, RDIM/4 },
+    { BOOTSTRAP_EDGE, "12", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 2, 2 },  { 0, 0 }, RDIM/4 },
+    { BOOTSTRAP_EDGE, "13", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 2, 2 },  { 0, 0 }, RDIM/4 },
+    { BOOTSTRAP_EDGE, "14", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 2, 2 },  { 0, 0 }, RDIM/4 },
+    { BOOTSTRAP_EDGE, "15", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, COMPLEX},   { 2, 2 },  { 0, 0 }, RDIM/4 },
 #if NATIVEINT != 128
-    { BOOTSTRAP_EDGE, "15", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTO,    NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 2, 2 },  { 0, 0 }, RDIM/4 },
-    { BOOTSTRAP_EDGE, "16", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTO,    NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 2, 2 },  { 0, 0 }, RDIM/4 },
-    { BOOTSTRAP_EDGE, "17", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 2, 2 },  { 0, 0 }, RDIM/4 },
-    { BOOTSTRAP_EDGE, "18", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 2, 2 },  { 0, 0 }, RDIM/4 },
+    { BOOTSTRAP_EDGE, "16", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 2, 2 },  { 0, 0 }, RDIM/4 },
+    { BOOTSTRAP_EDGE, "17", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 2, 2 },  { 0, 0 }, RDIM/4 },
+    { BOOTSTRAP_EDGE, "18", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 2, 2 },  { 0, 0 }, RDIM/4 },
+    { BOOTSTRAP_EDGE, "19", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 2, 2 },  { 0, 0 }, RDIM/4 },
+    { BOOTSTRAP_EDGE, "20", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, COMPLEX},   { 2, 2 },  { 0, 0 }, RDIM/4 },
+#endif
+    { BOOTSTRAP_EDGE, "21", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT, SPARSE_ENCAPSULATED, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 0, 0 }, RDIM/4 },
+    { BOOTSTRAP_EDGE, "22", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT, SPARSE_ENCAPSULATED, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 2, 2 },  { 0, 0 }, RDIM/4 },
+    // ==========================================
+    // TestType,       Descr,          Scheme, RDim,  MultDepth, SModSize, DSize, BSize, SecKeyDist, MaxRelinSkDeg, FModSize,       SecLvl, KSTech,        ScalTech,      LDigits, PtMod,StdDev, EvalAddCt, KSCt, MultTech, EncTech, PREMode, MultipartyMode, decryptionNoiseMode, ExecutionMode, NoiseEstimate, RegisterWordSize, CompositeDegree, CKKSDataType, LvlBudget, Dim1,       Slots
+    { BOOTSTRAP_SPARSE, "01", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 8, 8 }, 8 },
+    { BOOTSTRAP_SPARSE, "02", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 8, 8 }, 8 },
+    { BOOTSTRAP_SPARSE, "03", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 8, 8 }, 8 },
+    { BOOTSTRAP_SPARSE, "04", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 8, 8 }, 8 },
+    { BOOTSTRAP_SPARSE, "05", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, COMPLEX},   { 1, 1 },  { 8, 8 }, 8 },
+#if NATIVEINT != 128
+    { BOOTSTRAP_SPARSE, "06", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 8, 8 }, 8 },
+    { BOOTSTRAP_SPARSE, "07", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 8, 8 }, 8 },
+    { BOOTSTRAP_SPARSE, "08", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 8, 8 }, 8 },
+    { BOOTSTRAP_SPARSE, "09", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 8, 8 }, 8 },
+    { BOOTSTRAP_SPARSE, "10", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, COMPLEX},   { 1, 1 },  { 8, 8 }, 8 },
 #endif
     // ==========================================
-    // TestType,        Descr, Scheme,          RDim, MultDepth,  SModSize,     DSize, BatchSz, SecKeyDist,      MaxRelinSkDeg, FModSize,  SecLvl,       KSTech, ScalTech,        LDigits,      PtMod, StdDev, EvalAddCt, KSCt, MultTech, EncTech, PREMode, LvlBudget, Dim1,     Slots
-    { BOOTSTRAP_SPARSE, "01", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 8, 8 }, 8 },
-    { BOOTSTRAP_SPARSE, "02", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 8, 8 }, 8 },
-    { BOOTSTRAP_SPARSE, "03", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDMANUAL,     NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 8, 8 }, 8 },
-    { BOOTSTRAP_SPARSE, "04", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDMANUAL,     NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 8, 8 }, 8 },
+    // TestType,       Descr,          Scheme, RDim,  MultDepth, SModSize, DSize, BSize, SecKeyDist, MaxRelinSkDeg, FModSize,       SecLvl, KSTech,        ScalTech,      LDigits, PtMod,StdDev, EvalAddCt, KSCt, MultTech, EncTech, PREMode, MultipartyMode, decryptionNoiseMode, ExecutionMode, NoiseEstimate, RegisterWordSize, CompositeDegree, CKKSDataType, LvlBudget, Dim1,       Slots
+    { BOOTSTRAP_SPARSE, "11", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 2, 2 },  { 0, 0 }, 8 },
+    { BOOTSTRAP_SPARSE, "12", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 2, 2 },  { 0, 0 }, 8 },
+    { BOOTSTRAP_SPARSE, "13", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 2, 2 },  { 0, 0 }, 8 },
+    { BOOTSTRAP_SPARSE, "14", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 2, 2 },  { 0, 0 }, 8 },
+    { BOOTSTRAP_SPARSE, "15", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, COMPLEX},   { 2, 2 },  { 0, 0 }, 8 },
 #if NATIVEINT != 128
-    { BOOTSTRAP_SPARSE, "05", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTO,    NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 8, 8 }, 8 },
-    { BOOTSTRAP_SPARSE, "06", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTO,    NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 8, 8 }, 8 },
-    { BOOTSTRAP_SPARSE, "07", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 8, 8 }, 8 },
-    { BOOTSTRAP_SPARSE, "08", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 8, 8 }, 8 },
+    { BOOTSTRAP_SPARSE, "16", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 2, 2 },  { 0, 0 }, 8 },
+    { BOOTSTRAP_SPARSE, "17", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 2, 2 },  { 0, 0 }, 8 },
+    { BOOTSTRAP_SPARSE, "18", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 2, 2 },  { 0, 0 }, 8 },
+    { BOOTSTRAP_SPARSE, "19", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 2, 2 },  { 0, 0 }, 8 },
+    { BOOTSTRAP_SPARSE, "20", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, COMPLEX},   { 2, 2 },  { 0, 0 }, 8 },
 #endif
     // ==========================================
-    // TestType,        Descr, Scheme,          RDim, MultDepth,  SModSize,     DSize, BatchSz, SecKeyDist,      MaxRelinSkDeg, FModSize,  SecLvl,       KSTech, ScalTech,        LDigits,      PtMod, StdDev, EvalAddCt, KSCt, MultTech, EncTech, PREMode, LvlBudget, Dim1,     Slots
-    { BOOTSTRAP_SPARSE, "11", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 2, 2 },  { 0, 0 }, 8 },
-    { BOOTSTRAP_SPARSE, "12", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 2, 2 },  { 0, 0 }, 8 },
-    { BOOTSTRAP_SPARSE, "13", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDMANUAL,     NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 2, 2 },  { 0, 0 }, 8 },
-    { BOOTSTRAP_SPARSE, "14", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDMANUAL,     NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 2, 2 },  { 0, 0 }, 8 },
+    // TestType,       Descr,          Scheme, RDim,  MultDepth, SModSize, DSize, BSize, SecKeyDist, MaxRelinSkDeg, FModSize,       SecLvl, KSTech,        ScalTech,      LDigits, PtMod,StdDev, EvalAddCt, KSCt, MultTech, EncTech, PREMode, MultipartyMode, decryptionNoiseMode, ExecutionMode, NoiseEstimate, RegisterWordSize, CompositeDegree, CKKSDataType, LvlBudget, Dim1,       Slots
+    { BOOTSTRAP_SPARSE, "21", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 0, 0 }, 8 },
+    { BOOTSTRAP_SPARSE, "22", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 0, 0 }, 8 },
+    { BOOTSTRAP_SPARSE, "23", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 0, 0 }, 8 },
+    { BOOTSTRAP_SPARSE, "24", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 0, 0 }, 8 },
+    { BOOTSTRAP_SPARSE, "25", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, COMPLEX},   { 1, 1 },  { 0, 0 }, 8 },
 #if NATIVEINT != 128
-    { BOOTSTRAP_SPARSE, "15", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTO,    NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 2, 2 },  { 0, 0 }, 8 },
-    { BOOTSTRAP_SPARSE, "16", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTO,    NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 2, 2 },  { 0, 0 }, 8 },
-    { BOOTSTRAP_SPARSE, "17", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 2, 2 },  { 0, 0 }, 8 },
-    { BOOTSTRAP_SPARSE, "18", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 2, 2 },  { 0, 0 }, 8 },
+    { BOOTSTRAP_SPARSE, "26", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 0, 0 }, 8 },
+    { BOOTSTRAP_SPARSE, "27", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 0, 0 }, 8 },
+    { BOOTSTRAP_SPARSE, "28", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 0, 0 }, 8 },
+    { BOOTSTRAP_SPARSE, "29", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 0, 0 }, 8 },
+    { BOOTSTRAP_SPARSE, "30", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, COMPLEX},   { 1, 1 },  { 0, 0 }, 8 },
 #endif
     // ==========================================
-    // TestType,        Descr, Scheme,          RDim, MultDepth,  SModSize,     DSize, BatchSz, SecKeyDist,      MaxRelinSkDeg, FModSize,  SecLvl,       KSTech, ScalTech,        LDigits,      PtMod, StdDev, EvalAddCt, KSCt, MultTech, EncTech, PREMode, LvlBudget, Dim1,     Slots
-    { BOOTSTRAP_SPARSE, "21", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 0, 0 }, 8 },
-    { BOOTSTRAP_SPARSE, "22", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 0, 0 }, 8 },
-    { BOOTSTRAP_SPARSE, "23", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDMANUAL,     NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 0, 0 }, 8 },
-    { BOOTSTRAP_SPARSE, "24", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDMANUAL,     NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 0, 0 }, 8 },
+    // TestType,       Descr,          Scheme, RDim,  MultDepth, SModSize, DSize, BSize, SecKeyDist, MaxRelinSkDeg, FModSize,       SecLvl, KSTech,        ScalTech,      LDigits, PtMod,StdDev, EvalAddCt, KSCt, MultTech, EncTech, PREMode, MultipartyMode, decryptionNoiseMode, ExecutionMode, NoiseEstimate, RegisterWordSize, CompositeDegree, CKKSDataType, LvlBudget, Dim1,       Slots
+    { BOOTSTRAP_SPARSE, "31", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, 8 },
+    { BOOTSTRAP_SPARSE, "32", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, 8 },
+    { BOOTSTRAP_SPARSE, "33", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, 8 },
+    { BOOTSTRAP_SPARSE, "34", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, 8 },
+    { BOOTSTRAP_SPARSE, "35", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, COMPLEX},   { 3, 2 },  { 0, 0 }, 8 },
 #if NATIVEINT != 128
-    { BOOTSTRAP_SPARSE, "25", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTO,    NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 0, 0 }, 8 },
-    { BOOTSTRAP_SPARSE, "26", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTO,    NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 0, 0 }, 8 },
-    { BOOTSTRAP_SPARSE, "27", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 0, 0 }, 8 },
-    { BOOTSTRAP_SPARSE, "28", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 0, 0 }, 8 },
+    { BOOTSTRAP_SPARSE, "36", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, 8 },
+    { BOOTSTRAP_SPARSE, "37", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, 8 },
+    { BOOTSTRAP_SPARSE, "38", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, 8 },
+    { BOOTSTRAP_SPARSE, "39", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, 8 },
+    { BOOTSTRAP_SPARSE, "40", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, COMPLEX},   { 3, 2 },  { 0, 0 }, 8 },
 #endif
     // ==========================================
-    // TestType,        Descr, Scheme,          RDim, MultDepth,  SModSize,     DSize, BatchSz, SecKeyDist,      MaxRelinSkDeg, FModSize,  SecLvl,       KSTech, ScalTech,        LDigits,      PtMod, StdDev, EvalAddCt, KSCt, MultTech, EncTech, PREMode, LvlBudget, Dim1,     Slots
-    { BOOTSTRAP_SPARSE, "31", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, 8 },
-    { BOOTSTRAP_SPARSE, "32", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, 8 },
-    { BOOTSTRAP_SPARSE, "33", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDMANUAL,     NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, 8 },
-    { BOOTSTRAP_SPARSE, "34", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDMANUAL,     NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, 8 },
+    // TestType,       Descr,          Scheme, RDim,  MultDepth, SModSize, DSize, BSize, SecKeyDist, MaxRelinSkDeg, FModSize,       SecLvl, KSTech,        ScalTech,      LDigits, PtMod,StdDev, EvalAddCt, KSCt, MultTech, EncTech, PREMode, MultipartyMode, decryptionNoiseMode, ExecutionMode, NoiseEstimate, RegisterWordSize, CompositeDegree, CKKSDataType, LvlBudget, Dim1,       Slots
+    { BOOTSTRAP_SPARSE, "41", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 0, 0 }, 1 },
+    { BOOTSTRAP_SPARSE, "42", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 0, 0 }, 1 },
+    { BOOTSTRAP_SPARSE, "43", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 0, 0 }, 1 },
+    { BOOTSTRAP_SPARSE, "44", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 0, 0 }, 1 },
+    { BOOTSTRAP_SPARSE, "45", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, COMPLEX},   { 1, 1 },  { 0, 0 }, 1 },
 #if NATIVEINT != 128
-    { BOOTSTRAP_SPARSE, "35", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTO,    NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, 8 },
-    { BOOTSTRAP_SPARSE, "36", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTO,    NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, 8 },
-    { BOOTSTRAP_SPARSE, "37", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, 8 },
-    { BOOTSTRAP_SPARSE, "38", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, 8 },
+    { BOOTSTRAP_SPARSE, "46", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 0, 0 }, 1 },
+    { BOOTSTRAP_SPARSE, "47", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 0, 0 }, 1 },
+    { BOOTSTRAP_SPARSE, "48", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 0, 0 }, 1 },
+    { BOOTSTRAP_SPARSE, "49", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 0, 0 }, 1 },
+    { BOOTSTRAP_SPARSE, "50", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, COMPLEX},   { 1, 1 },  { 0, 0 }, 1 },
 #endif
-    { BOOTSTRAP_SPARSE, "39", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 0, 0 }, 1 },
-    { BOOTSTRAP_SPARSE, "40", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 0, 0 }, 1 },
-    { BOOTSTRAP_SPARSE, "41", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDMANUAL,     NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 0, 0 }, 1 },
-    { BOOTSTRAP_SPARSE, "42", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDMANUAL,     NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 0, 0 }, 1 },
-#if NATIVEINT != 128
-    { BOOTSTRAP_SPARSE, "43", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTO,    NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 0, 0 }, 1 },
-    { BOOTSTRAP_SPARSE, "44", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTO,    NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 0, 0 }, 1 },
-    { BOOTSTRAP_SPARSE, "45", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 0, 0 }, 1 },
-    { BOOTSTRAP_SPARSE, "46", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 0, 0 }, 1 },
-#endif
-
+    { BOOTSTRAP_SPARSE, "51", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT, SPARSE_ENCAPSULATED, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 8, 8 }, 8 },
+    { BOOTSTRAP_SPARSE, "52", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT, SPARSE_ENCAPSULATED, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 2, 2 },  { 0, 0 }, 8 },
+    { BOOTSTRAP_SPARSE, "53", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT, SPARSE_ENCAPSULATED, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 0, 0 }, 8 },
+    { BOOTSTRAP_SPARSE, "54", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT, SPARSE_ENCAPSULATED, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, 8 },
+    { BOOTSTRAP_SPARSE, "55", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT, SPARSE_ENCAPSULATED, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 0, 0 }, 1 },
     // ==========================================
-    // TestType,            Descr, Scheme,          RDim, MultDepth,  SModSize,     DSize, BatchSz, SecKeyDist,      MaxRelinSkDeg, FModSize,  SecLvl,       KSTech, ScalTech,        LDigits,      PtMod, StdDev, EvalAddCt, KSCt, MultTech, EncTech, PREMode, LvlBudget, Dim1
-    { BOOTSTRAP_KEY_SWITCH, "01", {CKKSRNS_SCHEME,  2048, MULT_DEPTH, SMODSIZE,     DFLT,  8,       SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 } },
-    { BOOTSTRAP_KEY_SWITCH, "02", {CKKSRNS_SCHEME,  2048, MULT_DEPTH, SMODSIZE,     DFLT,  8,       UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 } },
-    { BOOTSTRAP_KEY_SWITCH, "03", {CKKSRNS_SCHEME,  2048, MULT_DEPTH, SMODSIZE,     DFLT,  8,       SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDMANUAL,     NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 } },
-    { BOOTSTRAP_KEY_SWITCH, "04", {CKKSRNS_SCHEME,  2048, MULT_DEPTH, SMODSIZE,     DFLT,  8,       UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDMANUAL,     NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 } },
+    // TestType,           Descr,          Scheme, RDim,  MultDepth, SModSize, DSize, BSize, SecKeyDist, MaxRelinSkDeg, FModSize,       SecLvl, KSTech,        ScalTech,      LDigits, PtMod,StdDev, EvalAddCt, KSCt, MultTech, EncTech, PREMode, MultipartyMode, decryptionNoiseMode, ExecutionMode, NoiseEstimate, RegisterWordSize, CompositeDegree, CKKSDataType, LvlBudget, Dim1,       Slots
+    { BOOTSTRAP_KEY_SWITCH, "01", {CKKSRNS_SCHEME, 2048, MULT_DEPTH, SMODSIZE,  DFLT,     8,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 } },
+    { BOOTSTRAP_KEY_SWITCH, "02", {CKKSRNS_SCHEME, 2048, MULT_DEPTH, SMODSIZE,  DFLT,     8,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 } },
+    { BOOTSTRAP_KEY_SWITCH, "03", {CKKSRNS_SCHEME, 2048, MULT_DEPTH, SMODSIZE,  DFLT,     8,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 } },
+    { BOOTSTRAP_KEY_SWITCH, "04", {CKKSRNS_SCHEME, 2048, MULT_DEPTH, SMODSIZE,  DFLT,     8,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 } },
 #if NATIVEINT != 128
-    { BOOTSTRAP_KEY_SWITCH, "05", {CKKSRNS_SCHEME,  2048, MULT_DEPTH, SMODSIZE,     DFLT,  8,       SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTO,    NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 } },
-    { BOOTSTRAP_KEY_SWITCH, "06", {CKKSRNS_SCHEME,  2048, MULT_DEPTH, SMODSIZE,     DFLT,  8,       UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTO,    NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 } },
-    { BOOTSTRAP_KEY_SWITCH, "07", {CKKSRNS_SCHEME,  2048, MULT_DEPTH, SMODSIZE,     DFLT,  8,       SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 } },
-    { BOOTSTRAP_KEY_SWITCH, "08", {CKKSRNS_SCHEME,  2048, MULT_DEPTH, SMODSIZE,     DFLT,  8,       UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 } },
+    { BOOTSTRAP_KEY_SWITCH, "05", {CKKSRNS_SCHEME, 2048, MULT_DEPTH, SMODSIZE,  DFLT,     8,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 } },
+    { BOOTSTRAP_KEY_SWITCH, "06", {CKKSRNS_SCHEME, 2048, MULT_DEPTH, SMODSIZE,  DFLT,     8,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 } },
+    { BOOTSTRAP_KEY_SWITCH, "07", {CKKSRNS_SCHEME, 2048, MULT_DEPTH, SMODSIZE,  DFLT,     8,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 } },
+    { BOOTSTRAP_KEY_SWITCH, "08", {CKKSRNS_SCHEME, 2048, MULT_DEPTH, SMODSIZE,  DFLT,     8,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 } },
 #endif
+    { BOOTSTRAP_KEY_SWITCH, "09", {CKKSRNS_SCHEME, 2048, MULT_DEPTH, SMODSIZE,  DFLT,     8, SPARSE_ENCAPSULATED, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 } },
+    { BOOTSTRAP_KEY_SWITCH, "10", {CKKSRNS_SCHEME, 2048, MULT_DEPTH, SMODSIZE,  DFLT,     8, SPARSE_ENCAPSULATED, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 } },
     // ==========================================
-    // TestType,           Descr, Scheme,          RDim, MultDepth,  SModSize,     DSize, BatchSz, SecKeyDist,      MaxRelinSkDeg, FModSize,  SecLvl,       KSTech, ScalTech,        LDigits,      PtMod, StdDev, EvalAddCt, KSCt, MultTech, EncTech, PREMode, LvlBudget, Dim1,     Slots
-    { BOOTSTRAP_ITERATIVE, "01", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  8,       SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, 8},
-    { BOOTSTRAP_ITERATIVE, "02", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  8,       UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, 8},
-    { BOOTSTRAP_ITERATIVE, "03", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  8,       SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDMANUAL,     NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, 8},
-    { BOOTSTRAP_ITERATIVE, "04", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  8,       UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDMANUAL,     NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, 8},
+    // TestType,          Descr,          Scheme, RDim,  MultDepth, SModSize, DSize, BSize, SecKeyDist, MaxRelinSkDeg, FModSize,       SecLvl, KSTech,        ScalTech,      LDigits, PtMod,StdDev, EvalAddCt, KSCt, MultTech, EncTech, PREMode, MultipartyMode, decryptionNoiseMode, ExecutionMode, NoiseEstimate, RegisterWordSize, CompositeDegree, CKKSDataType, LvlBudget, Dim1,       Slots
+    { BOOTSTRAP_ITERATIVE, "01", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,     8,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, 8},
+    { BOOTSTRAP_ITERATIVE, "02", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,     8,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, 8},
+    { BOOTSTRAP_ITERATIVE, "03", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,     8,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, 8},
+    { BOOTSTRAP_ITERATIVE, "04", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,     8,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, 8},
+    { BOOTSTRAP_ITERATIVE, "05", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,     8,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, COMPLEX},   { 3, 2 },  { 0, 0 }, 8},
 #if NATIVEINT != 128
-    { BOOTSTRAP_ITERATIVE, "05", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  8,       SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTO,    NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, 8},
-    { BOOTSTRAP_ITERATIVE, "06", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  8,       UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTO,    NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, 8},
-    { BOOTSTRAP_ITERATIVE, "07", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  8,       SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, 8},
-    { BOOTSTRAP_ITERATIVE, "08", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  8,       UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, 8},
-#endif
-    // TestType,           Descr, Scheme,          RDim, MultDepth,  SModSize,     DSize, BatchSz, SecKeyDist,      MaxRelinSkDeg, FModSize,  SecLvl,       KSTech, ScalTech,        LDigits,      PtMod, StdDev, EvalAddCt, KSCt, MultTech, EncTech, PREMode, LvlBudget, Dim1,     Slots
-    { BOOTSTRAP_ITERATIVE, "09", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, RDIM/2},
-    { BOOTSTRAP_ITERATIVE, "10", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, RDIM/2},
-    { BOOTSTRAP_ITERATIVE, "11", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDMANUAL,     NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, RDIM/2},
-    { BOOTSTRAP_ITERATIVE, "12", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDMANUAL,     NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, RDIM/2},
-#if NATIVEINT != 128
-    { BOOTSTRAP_ITERATIVE, "13", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTO,    NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, RDIM/2},
-    { BOOTSTRAP_ITERATIVE, "14", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTO,    NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, RDIM/2},
-    { BOOTSTRAP_ITERATIVE, "15", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, RDIM/2},
-    { BOOTSTRAP_ITERATIVE, "16", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, RDIM/2},
+    { BOOTSTRAP_ITERATIVE, "06", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,     8,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, 8},
+    { BOOTSTRAP_ITERATIVE, "07", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,     8,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, 8},
+    { BOOTSTRAP_ITERATIVE, "08", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,     8,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, 8},
+    { BOOTSTRAP_ITERATIVE, "09", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,     8,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, 8},
+    { BOOTSTRAP_ITERATIVE, "10", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,     8,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, COMPLEX},   { 3, 2 },  { 0, 0 }, 8},
 #endif
     // ==========================================
-    // TestType,           Descr, Scheme,          RDim, MultDepth,  SModSize,     DSize, BatchSz, SecKeyDist,      MaxRelinSkDeg, FModSize,  SecLvl,       KSTech, ScalTech,        LDigits,      PtMod, StdDev, EvalAddCt, KSCt, MultTech, EncTech, PREMode, LvlBudget, Dim1,     Slots
-    { BOOTSTRAP_NUM_TOWERS, "01", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  8,       SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, 8},
-    { BOOTSTRAP_NUM_TOWERS, "02", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  8,       UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, 8},
-    { BOOTSTRAP_NUM_TOWERS, "03", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  8,       SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDMANUAL,     NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, 8},
-    { BOOTSTRAP_NUM_TOWERS, "04", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  8,       UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDMANUAL,     NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, 8},
+    // TestType,          Descr,          Scheme, RDim,  MultDepth, SModSize, DSize, BSize, SecKeyDist, MaxRelinSkDeg, FModSize,       SecLvl, KSTech,        ScalTech,      LDigits, PtMod,StdDev, EvalAddCt, KSCt, MultTech, EncTech, PREMode, MultipartyMode, decryptionNoiseMode, ExecutionMode, NoiseEstimate, RegisterWordSize, CompositeDegree, CKKSDataType, LvlBudget, Dim1,       Slots
+    { BOOTSTRAP_ITERATIVE, "11", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, RDIM/2},
+    { BOOTSTRAP_ITERATIVE, "12", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, RDIM/2},
+    { BOOTSTRAP_ITERATIVE, "13", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, RDIM/2},
+    { BOOTSTRAP_ITERATIVE, "14", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, RDIM/2},
+    { BOOTSTRAP_ITERATIVE, "15", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, COMPLEX},   { 3, 2 },  { 0, 0 }, RDIM/2},
 #if NATIVEINT != 128
-    { BOOTSTRAP_NUM_TOWERS, "05", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  8,       SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTO,    NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, 8},
-    { BOOTSTRAP_NUM_TOWERS, "06", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  8,       UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTO,    NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, 8},
-    { BOOTSTRAP_NUM_TOWERS, "07", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  8,       SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, 8},
-    { BOOTSTRAP_NUM_TOWERS, "08", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  8,       UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, 8},
+    { BOOTSTRAP_ITERATIVE, "16", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, RDIM/2},
+    { BOOTSTRAP_ITERATIVE, "17", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, RDIM/2},
+    { BOOTSTRAP_ITERATIVE, "18", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, RDIM/2},
+    { BOOTSTRAP_ITERATIVE, "19", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, RDIM/2},
+    { BOOTSTRAP_ITERATIVE, "20", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, COMPLEX},   { 3, 2 },  { 0, 0 }, RDIM/2},
 #endif
-    // TestType,            Descr, Scheme,          RDim, MultDepth,  SModSize,     DSize, BatchSz, SecKeyDist,      MaxRelinSkDeg, FModSize,  SecLvl,       KSTech, ScalTech,        LDigits,      PtMod, StdDev, EvalAddCt, KSCt, MultTech, EncTech, PREMode, LvlBudget, Dim1,     Slots
-    { BOOTSTRAP_NUM_TOWERS, "09", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, RDIM/2},
-    { BOOTSTRAP_NUM_TOWERS, "10", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, RDIM/2},
-    { BOOTSTRAP_NUM_TOWERS, "11", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDMANUAL,     NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, RDIM/2},
-    { BOOTSTRAP_NUM_TOWERS, "12", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDMANUAL,     NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, RDIM/2},
+    { BOOTSTRAP_ITERATIVE, "21", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,     8, SPARSE_ENCAPSULATED, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, 8},
+    { BOOTSTRAP_ITERATIVE, "22", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,     8, SPARSE_ENCAPSULATED, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, COMPLEX},   { 3, 2 },  { 0, 0 }, 8},
+    { BOOTSTRAP_ITERATIVE, "23", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT, SPARSE_ENCAPSULATED, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, RDIM/2},
+    { BOOTSTRAP_ITERATIVE, "24", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT, SPARSE_ENCAPSULATED, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, COMPLEX},   { 3, 2 },  { 0, 0 }, RDIM/2},
+    // ==========================================
+    // TestType,           Descr,          Scheme, RDim,  MultDepth, SModSize, DSize, BSize, SecKeyDist, MaxRelinSkDeg, FModSize,       SecLvl, KSTech,        ScalTech,      LDigits, PtMod,StdDev, EvalAddCt, KSCt, MultTech, EncTech, PREMode, MultipartyMode, decryptionNoiseMode, ExecutionMode, NoiseEstimate, RegisterWordSize, CompositeDegree, CKKSDataType, LvlBudget, Dim1,       Slots
+    { BOOTSTRAP_NUM_TOWERS, "01", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,     8,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, 8},
+    { BOOTSTRAP_NUM_TOWERS, "02", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,     8,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, 8},
+    { BOOTSTRAP_NUM_TOWERS, "03", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,     8,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, 8},
+    { BOOTSTRAP_NUM_TOWERS, "04", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,     8,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, 8},
 #if NATIVEINT != 128
-    { BOOTSTRAP_NUM_TOWERS, "13", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTO,    NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, RDIM/2},
-    { BOOTSTRAP_NUM_TOWERS, "14", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTO,    NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, RDIM/2},
-    { BOOTSTRAP_NUM_TOWERS, "15", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, RDIM/2},
-    { BOOTSTRAP_NUM_TOWERS, "16", {CKKSRNS_SCHEME,  RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 3, 2 },  { 0, 0 }, RDIM/2},
+    { BOOTSTRAP_NUM_TOWERS, "05", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,     8,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, 8},
+    { BOOTSTRAP_NUM_TOWERS, "06", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,     8,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, 8},
+    { BOOTSTRAP_NUM_TOWERS, "07", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,     8,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, 8},
+    { BOOTSTRAP_NUM_TOWERS, "08", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,     8,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, 8},
 #endif
     // ==========================================
-    // TestType,           Descr, Scheme,         RDim, MultDepth,  SModSize,     DSize, BatchSz, SecKeyDist,      MaxRelinSkDeg, FModSize,  SecLvl,       KSTech, ScalTech,        LDigits,      PtMod, StdDev, EvalAddCt, KSCt, MultTech, EncTech, PREMode, LvlBudget, Dim1,       Slots
-    { BOOTSTRAP_SERIALIZE, "01", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 32, 32 }, RDIM/2 },
-    { BOOTSTRAP_SERIALIZE, "02", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 1, 1 },  { 32, 32 }, RDIM/2 },
-    { BOOTSTRAP_SERIALIZE, "03", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 2, 2 },  { 0, 0 },   RDIM/2 },
-    { BOOTSTRAP_SERIALIZE, "04", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 2, 2 },  { 0, 0 },   RDIM/2 },
-    { BOOTSTRAP_SERIALIZE, "05", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    UNIFORM_TERNARY, DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 2, 2 },  { 4, 4 },   RDIM/2 },
-    { BOOTSTRAP_SERIALIZE, "06", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,     DFLT,  DFLT,    SPARSE_TERNARY,  DFLT,          FMODSIZE,  HEStd_NotSet, HYBRID, FIXEDAUTO,       NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT},   { 2, 2 },  { 4, 4 },   RDIM/2 },
+    // TestType,           Descr,          Scheme, RDim,  MultDepth, SModSize, DSize, BSize, SecKeyDist, MaxRelinSkDeg, FModSize,       SecLvl, KSTech,        ScalTech,      LDigits, PtMod,StdDev, EvalAddCt, KSCt, MultTech, EncTech, PREMode, MultipartyMode, decryptionNoiseMode, ExecutionMode, NoiseEstimate, RegisterWordSize, CompositeDegree, CKKSDataType, LvlBudget, Dim1,       Slots
+    { BOOTSTRAP_NUM_TOWERS, "09", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, RDIM/2},
+    { BOOTSTRAP_NUM_TOWERS, "10", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, RDIM/2},
+    { BOOTSTRAP_NUM_TOWERS, "11", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, RDIM/2},
+    { BOOTSTRAP_NUM_TOWERS, "12", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,     FIXEDMANUAL, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, RDIM/2},
+#if NATIVEINT != 128
+    { BOOTSTRAP_NUM_TOWERS, "13", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, RDIM/2},
+    { BOOTSTRAP_NUM_TOWERS, "14", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,    FLEXIBLEAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, RDIM/2},
+    { BOOTSTRAP_NUM_TOWERS, "15", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, RDIM/2},
+    { BOOTSTRAP_NUM_TOWERS, "16", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID, FLEXIBLEAUTOEXT, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, RDIM/2},
+#endif
+    { BOOTSTRAP_NUM_TOWERS, "17", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,     8, SPARSE_ENCAPSULATED, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, 8},
+    { BOOTSTRAP_NUM_TOWERS, "18", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT, SPARSE_ENCAPSULATED, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 3, 2 },  { 0, 0 }, RDIM/2},
     // ==========================================
+    // TestType,          Descr,          Scheme, RDim,  MultDepth, SModSize, DSize, BSize, SecKeyDist, MaxRelinSkDeg, FModSize,       SecLvl, KSTech,        ScalTech,      LDigits, PtMod,StdDev, EvalAddCt, KSCt, MultTech, EncTech, PREMode, MultipartyMode, decryptionNoiseMode, ExecutionMode, NoiseEstimate, RegisterWordSize, CompositeDegree, CKKSDataType, LvlBudget, Dim1,       Slots
+    { BOOTSTRAP_SERIALIZE, "01", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 32, 32 }, RDIM/2 },
+    { BOOTSTRAP_SERIALIZE, "02", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 1, 1 },  { 32, 32 }, RDIM/2 },
+    { BOOTSTRAP_SERIALIZE, "03", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 2, 2 },  { 0, 0 },   RDIM/2 },
+    { BOOTSTRAP_SERIALIZE, "04", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 2, 2 },  { 0, 0 },   RDIM/2 },
+    { BOOTSTRAP_SERIALIZE, "05", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 2, 2 },  { 4, 4 },   RDIM/2 },
+    { BOOTSTRAP_SERIALIZE, "06", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,      SPARSE_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 2, 2 },  { 4, 4 },   RDIM/2 },
+    { BOOTSTRAP_SERIALIZE, "07", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT,     UNIFORM_TERNARY, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, COMPLEX},   { 2, 2 },  { 0, 0 },   RDIM/2 },
+    { BOOTSTRAP_SERIALIZE, "08", {CKKSRNS_SCHEME, RDIM, MULT_DEPTH, SMODSIZE,  DFLT,  DFLT, SPARSE_ENCAPSULATED, DFLT, FMODSIZE, HEStd_NotSet, HYBRID,       FIXEDAUTO, NUM_LRG_DIGS, DFLT,  DFLT,   DFLT,      DFLT, DFLT,     DFLT,    DFLT,   DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 2, 2 },  { 4, 4 },   RDIM/2 },
+    // ==========================================
+    // TestType,                    Descr,          Scheme,    RDim, MultDepth, SModSize, DSize, BSize, SecKeyDist, MaxRelinSkDeg, FModSize,       SecLvl, KSTech,    ScalTech,      LDigits, PtMod,StdDev, EvalAddCt, KSCt, MultTech, EncTech, PREMode, MultipartyMode, decryptionNoiseMode, ExecutionMode, NoiseEstimate, RegisterWordSize, CompositeDegree, CKKSDataType, LvlBudget, Dim1,       Slots
+    { BOOTSTRAP_SPARSE_ENCAPSULATED, "01", {CKKSRNS_SCHEME, 1 << 12,        18,       50,  DFLT,  DFLT, SPARSE_ENCAPSULATED, DFLT,       60, HEStd_NotSet, HYBRID,   FIXEDAUTO, NUM_LRG_DIGS,  DFLT,  DFLT,      DFLT, DFLT,     DFLT,    DFLT,    DFLT,           DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 4, 4 },  { 8, 8 }, 8 },
+    { BOOTSTRAP_SPARSE_ENCAPSULATED, "02", {CKKSRNS_SCHEME, 1 << 12,        18,       50,  DFLT,  DFLT, SPARSE_ENCAPSULATED, DFLT,       60, HEStd_NotSet, HYBRID, FIXEDMANUAL, NUM_LRG_DIGS,  DFLT,  DFLT,      DFLT, DFLT,     DFLT,    DFLT,    DFLT,           DFLT,  DFLT,   DFLT,      DFLT, DFLT, DFLT, REAL},   { 4, 4 },  { 8, 8 }, 8 },
 };
 // clang-format on
+
 //===========================================================================================================
 class UTCKKSRNS_BOOT : public ::testing::TestWithParam<TEST_CASE_UTCKKSRNS_BOOT> {
     using Element = DCRTPoly;
 
     // The precision after which we consider two values equal.
     // This is necessary because CKKS works for approximate numbers.
-    const double eps = 0.0001;
+    static constexpr double eps = 0.0001;
 
     // CalculateApproximationError() calculates the precision number (or approximation error).
     // The higher the precision, the less the error.
@@ -329,7 +390,7 @@ class UTCKKSRNS_BOOT : public ::testing::TestWithParam<TEST_CASE_UTCKKSRNS_BOOT>
             OPENFHE_THROW("Cannot compare vectors with different numbers of elements");
 
         // using the infinity norm
-        double maxError = 0;
+        double maxError = 0.;
         for (size_t i = 0; i < result.size(); ++i) {
             double error = std::abs(result[i].real() - expectedResult[i].real());
             if (maxError < error)
@@ -358,11 +419,13 @@ protected:
             cc->EvalMultKeyGen(keyPair.secretKey);
 
             std::vector<std::complex<double>> input;
+            // If CKKSDataType is set to REAL, the imaginary parts are ignored.
             if (testData.slots < 8) {
-                input = Fill({0.1415926}, testData.slots);
+                input = Fill({0.1415926 + 0.1415926i}, testData.slots);
             }
             else {
-                input = Fill({0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888},
+                input = Fill({0.111111 + 0.999999i, 0.222222 - 0.888888i, 0.333333 + 0.777777i, 0.444444 - 0.666666i,
+                              0.555555 + 0.555555i, 0.666666 - 0.444444i, 0.777777 + 0.333333i, 0.888888 - 0.222222i},
                              testData.slots);
             }
 
@@ -380,7 +443,11 @@ protected:
                           failmsg + " Bootstrapping for fully packed ciphertexts fails");
 
             int32_t rotIndex = (testData.slots < 8) ? 0 : 6;
-            auto temp6       = input;
+            if (cc->GetCKKSDataType() == REAL) {
+                for (size_t i = 0; i < testData.slots; i++)
+                    input[i].imag(0.0);
+            }
+            auto temp6 = input;
             std::rotate(temp6.begin(), temp6.begin() + rotIndex, temp6.end());
 
             auto ciphertext6 = cc->EvalAtIndex(ciphertextAfter, rotIndex);
@@ -498,8 +565,10 @@ protected:
             cc->EvalAtIndexKeyGen(keyPair.secretKey, {6});
             cc->EvalMultKeyGen(keyPair.secretKey);
 
-            std::vector<std::complex<double>> input(
-                Fill({0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888}, testData.slots));
+            // If CKKSDataType is set to REAL, the imaginary parts are ignored.
+            auto input(Fill({0.111111 + 0.999999i, 0.222222 - 0.888888i, 0.333333 + 0.777777i, 0.444444 - 0.666666i,
+                             0.555555 + 0.555555i, 0.666666 - 0.444444i, 0.777777 + 0.333333i, 0.888888 - 0.222222i},
+                            testData.slots));
             size_t encodedLength = input.size();
 
             Plaintext plaintext  = cc->MakeCKKSPackedPlaintext(input, 1, MULT_DEPTH - 1, nullptr, testData.slots);
@@ -531,6 +600,10 @@ protected:
 
             EXPECT_GE(precisionMultipleIterations + precisionBuffer, numIterations * precision);
 
+            if (cc->GetCKKSDataType() == REAL) {
+                for (size_t i = 0; i < testData.slots; i++)
+                    input[i].imag(0.0);
+            }
             auto temp6 = input;
             std::rotate(temp6.begin(), temp6.begin() + 6, temp6.end());
 
@@ -566,7 +639,7 @@ protected:
             cc->EvalAtIndexKeyGen(keyPair.secretKey, {6});
             cc->EvalMultKeyGen(keyPair.secretKey);
 
-            std::vector<std::complex<double>> input(
+            auto input(
                 Fill({0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888}, testData.slots));
             size_t encodedLength = input.size();
 
@@ -660,8 +733,10 @@ protected:
             cc->EvalBootstrapPrecompute(testData.slots);
             cc->EvalBootstrapPrecompute(testData.slots / 2);
             //====================================================================================================
-            std::vector<std::complex<double>> input(
-                Fill({0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888}, testData.slots));
+            // If CKKSDataType is set to REAL, the imaginary parts are ignored.
+            auto input(Fill({0.111111 + 0.999999i, 0.222222 - 0.888888i, 0.333333 + 0.777777i, 0.444444 - 0.666666i,
+                             0.555555 + 0.555555i, 0.666666 - 0.444444i, 0.777777 + 0.333333i, 0.888888 - 0.222222i},
+                            testData.slots));
             size_t encodedLength = input.size();
 
             Plaintext plaintext1  = cc->MakeCKKSPackedPlaintext(input, 1, MULT_DEPTH - 1, nullptr, testData.slots);
@@ -676,8 +751,8 @@ protected:
                           failmsg + " Bootstrapping for fully packed ciphertexts fails");
 
             //====================================================================================================
-            std::vector<std::complex<double>> input2(
-                Fill({0.111111, 0.222222, 0.333333, 0.444444}, testData.slots / 2));
+            auto input2(Fill({0.111111 + 0.999999i, 0.222222 - 0.888888i, 0.333333 + 0.777777i, 0.444444 - 0.666666i},
+                             testData.slots / 2));
             size_t encodedLength2 = input2.size();
 
             Plaintext plaintext2  = cc->MakeCKKSPackedPlaintext(input2, 1, MULT_DEPTH - 1, nullptr, testData.slots / 2);
@@ -695,6 +770,53 @@ protected:
         catch (std::exception& e) {
             std::cerr << "Exception thrown from " << __func__ << "(): " << e.what() << std::endl;
             // make it fail
+            EXPECT_TRUE(0 == 1) << failmsg;
+        }
+        catch (...) {
+            UNIT_TEST_HANDLE_ALL_EXCEPTIONS;
+        }
+    }
+
+    void UnitTest_BootstrapSE(const TEST_CASE_UTCKKSRNS_BOOT& testData, const std::string& failmsg = std::string()) {
+        try {
+            CryptoContext<Element> cc(UnitTestGenerateContext(testData.params));
+
+            auto keyPair = cc->KeyGen();
+
+            auto cryptoParams =
+                std::dynamic_pointer_cast<CryptoParametersCKKSRNS>(keyPair.secretKey->GetCryptoParameters());
+
+            std::vector<double> x = {0.25, 0.5, 0.75, 1.0, 0.375, 0.675, 0.125, 0.925};
+            size_t encodedLength  = x.size();
+
+            // We start with a depleted ciphertext that has used up all of its levels.
+            auto depth = cryptoParams->GetMultiplicativeDepth();
+            auto ptxt  = cc->MakeCKKSPackedPlaintext(x, 1, depth - 1);
+            ptxt->SetLength(encodedLength);
+            auto ctxt = cc->Encrypt(keyPair.publicKey, ptxt);
+
+            // Test KeySwitchSparse(keyPair.secretKey, ctxt)
+            const auto paramsQ = cryptoParams->GetElementParams();
+
+            DCRTPoly::TugType tug;
+            DCRTPoly sNew(tug, paramsQ, Format::EVALUATION, 32);
+
+            auto skNew = std::make_shared<PrivateKeyImpl<DCRTPoly>>(cc);
+            skNew->SetPrivateElement(std::move(sNew));
+
+            auto evalKey = FHECKKSRNS::KeySwitchGenSparse(keyPair.secretKey, skNew);
+
+            auto ctresult = FHECKKSRNS::KeySwitchSparse(ctxt, evalKey);
+
+            Plaintext result;
+            cc->Decrypt(skNew, ctresult, &result);
+            result->SetLength(8);
+
+            checkEquality(ptxt->GetCKKSPackedValue(), result->GetCKKSPackedValue(), eps,
+                          failmsg + " input/output missmatch");
+        }
+        catch (std::exception& e) {
+            std::cerr << "Exception thrown from " << __func__ << "(): " << e.what() << std::endl;
             EXPECT_TRUE(0 == 1) << failmsg;
         }
         catch (...) {
@@ -725,6 +847,9 @@ TEST_P(UTCKKSRNS_BOOT, CKKSRNS) {
             break;
         case BOOTSTRAP_SERIALIZE:
             UnitTest_Bootstrap_Serialize(test, test.buildTestName());
+            break;
+        case BOOTSTRAP_SPARSE_ENCAPSULATED:
+            UnitTest_BootstrapSE(test, test.buildTestName());
             break;
         default:
             break;

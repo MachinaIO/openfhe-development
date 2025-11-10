@@ -32,19 +32,20 @@
 #ifndef LBCRYPTO_CRYPTO_BASE_ADVANCEDSHE_H
 #define LBCRYPTO_CRYPTO_BASE_ADVANCEDSHE_H
 
+#include "ciphertext-fwd.h"
+#include "encoding/plaintext-fwd.h"
+#include "key/evalkey-fwd.h"
 #include "key/privatekey-fwd.h"
 #include "key/publickey-fwd.h"
-#include "key/evalkey-fwd.h"
-#include "encoding/plaintext-fwd.h"
-#include "ciphertext-fwd.h"
-#include "utils/inttypes.h"
 #include "utils/exception.h"
+#include "utils/inttypes.h"
 
-#include <memory>
-#include <vector>
-#include <string>
+#include <complex>
 #include <map>
+#include <memory>
 #include <set>
+#include <string>
+#include <vector>
 
 /**
  * @namespace lbcrypto
@@ -65,7 +66,7 @@ class AdvancedSHEBase {
     using TugType  = typename Element::TugType;
 
 public:
-    virtual ~AdvancedSHEBase() {}
+    virtual ~AdvancedSHEBase() = default;
 
     /**
    * Virtual function for evaluating addition of a list of ciphertexts.
@@ -108,10 +109,17 @@ public:
    * @param constants vector containing double weights.
    * @return A ciphertext containing the linear weighted sum.
    */
-    virtual Ciphertext<Element> EvalLinearWSum(std::vector<ConstCiphertext<Element>>& ciphertextVec,
+    virtual Ciphertext<Element> EvalLinearWSum(std::vector<ReadOnlyCiphertext<Element>>& ciphertextVec,
+                                               const std::vector<int64_t>& weights) const {
+        OPENFHE_THROW("Not implemented for this scheme");
+    }
+    virtual Ciphertext<Element> EvalLinearWSum(std::vector<ReadOnlyCiphertext<Element>>& ciphertextVec,
                                                const std::vector<double>& weights) const {
-        std::string errMsg = "EvalLinearWSum is not implemented for this scheme.";
-        OPENFHE_THROW(errMsg);
+        OPENFHE_THROW("Not implemented for this scheme");
+    }
+    virtual Ciphertext<Element> EvalLinearWSum(std::vector<ReadOnlyCiphertext<Element>>& ciphertextVec,
+                                               const std::vector<std::complex<double>>& weights) const {
+        OPENFHE_THROW("Not implemented for this scheme");
     }
 
     /**
@@ -124,9 +132,16 @@ public:
    * @return A ciphertext containing the linear weighted sum.
    */
     virtual Ciphertext<Element> EvalLinearWSumMutable(std::vector<Ciphertext<Element>>& ciphertextVec,
+                                                      const std::vector<int64_t>& weights) const {
+        OPENFHE_THROW("Not implemented for this scheme");
+    }
+    virtual Ciphertext<Element> EvalLinearWSumMutable(std::vector<Ciphertext<Element>>& ciphertextVec,
                                                       const std::vector<double>& weights) const {
-        std::string errMsg = "EvalLinearWSumMutable is not implemented for this scheme.";
-        OPENFHE_THROW(errMsg);
+        OPENFHE_THROW("Not implemented for this scheme");
+    }
+    virtual Ciphertext<Element> EvalLinearWSumMutable(std::vector<Ciphertext<Element>>& ciphertextVec,
+                                                      const std::vector<std::complex<double>>& weights) const {
+        OPENFHE_THROW("Not implemented for this scheme");
     }
 
     //------------------------------------------------------------------------------
@@ -134,7 +149,7 @@ public:
     //------------------------------------------------------------------------------
 
     /**
-   * Method for polynomial evaluation for polynomials represented in the power
+   * Method for computing the powers for polynomials represented in the power
    * series. This uses a binary tree computation of
    * the polynomial powers.
    *
@@ -143,9 +158,52 @@ public:
    * size of the vector is the degree of the polynomial + 1
    * @return the result of polynomial evaluation.
    */
-    virtual Ciphertext<Element> EvalPoly(ConstCiphertext<Element> ciphertext,
+    virtual std::shared_ptr<seriesPowers<Element>> EvalPowers(ConstCiphertext<Element>& ciphertext,
+                                                              const std::vector<int64_t>& coefficients) const {
+        OPENFHE_THROW("Not implemented for this scheme");
+    }
+    virtual std::shared_ptr<seriesPowers<Element>> EvalPowers(ConstCiphertext<Element>& ciphertext,
+                                                              const std::vector<double>& coefficients) const {
+        OPENFHE_THROW("Not implemented for this scheme");
+    }
+    virtual std::shared_ptr<seriesPowers<Element>> EvalPowers(
+        ConstCiphertext<Element>& ciphertext, const std::vector<std::complex<double>>& coefficients) const {
+        OPENFHE_THROW("Not implemented for this scheme");
+    }
+
+    /**
+   * Method for computing the powers of a ciphertext to be used when evaluating a polynomial.
+   * Uses EvalPowersLinear() for low polynomial degrees (degree < 5), or EvalPowersPS() for higher degrees.
+   *
+   * @param &cipherText input ciphertext
+   * @param &coefficients is the vector of coefficients in the polynomial; the
+   * size of the vector is the degree of the polynomial + 1
+   * @return the resulting data structure of powers.
+   */
+    virtual Ciphertext<Element> EvalPoly(ConstCiphertext<Element>& ciphertext,
+                                         const std::vector<int64_t>& coefficients) const {
+        OPENFHE_THROW("Not implemented for this scheme");
+    }
+    virtual Ciphertext<Element> EvalPoly(ConstCiphertext<Element>& ciphertext,
                                          const std::vector<double>& coefficients) const {
-        OPENFHE_THROW("EvalPoly is not supported for the scheme.");
+        OPENFHE_THROW("Not implemented for this scheme");
+    }
+    virtual Ciphertext<Element> EvalPoly(ConstCiphertext<Element>& ciphertext,
+                                         const std::vector<std::complex<double>>& coefficients) const {
+        OPENFHE_THROW("Not implemented for this scheme");
+    }
+
+    virtual Ciphertext<Element> EvalPolyWithPrecomp(std::shared_ptr<seriesPowers<Element>> powers,
+                                                    const std::vector<int64_t>& coefficients) const {
+        OPENFHE_THROW("Not implemented for this scheme");
+    }
+    virtual Ciphertext<Element> EvalPolyWithPrecomp(std::shared_ptr<seriesPowers<Element>> powers,
+                                                    const std::vector<double>& coefficients) const {
+        OPENFHE_THROW("Not implemented for this scheme");
+    }
+    virtual Ciphertext<Element> EvalPolyWithPrecomp(std::shared_ptr<seriesPowers<Element>> powers,
+                                                    const std::vector<std::complex<double>>& coefficients) const {
+        OPENFHE_THROW("Not implemented for this scheme");
     }
 
     /**
@@ -158,18 +216,70 @@ public:
    * size of the vector is the degree of the polynomial + 1
    * @return the result of polynomial evaluation.
    */
-    virtual Ciphertext<Element> EvalPolyLinear(ConstCiphertext<Element> ciphertext,
+    virtual Ciphertext<Element> EvalPolyLinear(ConstCiphertext<Element>& ciphertext,
+                                               const std::vector<int64_t>& coefficients) const {
+        OPENFHE_THROW("Not implemented for this scheme");
+    }
+    virtual Ciphertext<Element> EvalPolyLinear(ConstCiphertext<Element>& ciphertext,
                                                const std::vector<double>& coefficients) const {
-        OPENFHE_THROW("EvalPolyLinear is not supported for the scheme.");
+        OPENFHE_THROW("Not implemented for this scheme");
+    }
+    virtual Ciphertext<Element> EvalPolyLinear(ConstCiphertext<Element>& ciphertext,
+                                               const std::vector<std::complex<double>>& coefficients) const {
+        OPENFHE_THROW("Not implemented for this scheme");
     }
 
-    virtual Ciphertext<Element> EvalPolyPS(ConstCiphertext<Element> x, const std::vector<double>& coefficients) const {
-        OPENFHE_THROW("EvalPolyPS is not supported for the scheme.");
+    /**
+   * Method for polynomial evaluation for polynomials represented in the power
+   * series. This uses the Paterson-Stockmeyer algorith,.
+   *
+   * @param &cipherText input ciphertext
+   * @param &coefficients is the vector of coefficients in the polynomial; the
+   * size of the vector is the degree of the polynomial + 1
+   * @return the result of polynomial evaluation.
+   */
+    virtual Ciphertext<Element> EvalPolyPS(ConstCiphertext<Element>& x,
+                                           const std::vector<int64_t>& coefficients) const {
+        OPENFHE_THROW("Not implemented for this scheme");
+    }
+    virtual Ciphertext<Element> EvalPolyPS(ConstCiphertext<Element>& x, const std::vector<double>& coefficients) const {
+        OPENFHE_THROW("Not implemented for this scheme");
+    }
+    virtual Ciphertext<Element> EvalPolyPS(ConstCiphertext<Element>& x,
+                                           const std::vector<std::complex<double>>& coefficients) const {
+        OPENFHE_THROW("Not implemented for this scheme");
     }
 
     //------------------------------------------------------------------------------
     // EVAL CHEBYSHEV SERIES
     //------------------------------------------------------------------------------
+
+    /**
+   * Method for computing the Chebyshev polynomials to be used in polynomial interpolation via the Chebyshev series.
+   * This uses a binary tree computation of the Chebyshev polynomials.
+   *
+   * @param &cipherText input ciphertext
+   * @param &coefficients is the vector of coefficients in the polynomial; the
+   * size of the vector is the degree of the polynomial + 1
+   * @param a - lower bound of argument for which the coefficients were found
+   * @param b - upper bound of argument for which the coefficients were found
+   * @return the result of polynomial evaluation.
+   */
+    virtual std::shared_ptr<seriesPowers<Element>> EvalChebyPolys(ConstCiphertext<Element>& ciphertext,
+                                                                  const std::vector<int64_t>& coefficients, double a,
+                                                                  double b) const {
+        OPENFHE_THROW("Not implemented for this scheme");
+    }
+    virtual std::shared_ptr<seriesPowers<Element>> EvalChebyPolys(ConstCiphertext<Element>& ciphertext,
+                                                                  const std::vector<double>& coefficients, double a,
+                                                                  double b) const {
+        OPENFHE_THROW("Not implemented for this scheme");
+    }
+    virtual std::shared_ptr<seriesPowers<Element>> EvalChebyPolys(ConstCiphertext<Element>& ciphertext,
+                                                                  const std::vector<std::complex<double>>& coefficients,
+                                                                  double a, double b) const {
+        OPENFHE_THROW("Not implemented for this scheme");
+    }
 
     /**
    * Method for evaluating Chebyshev polynomial interpolation;
@@ -183,21 +293,64 @@ public:
    * @param b - upper bound of argument for which the coefficients were found
    * @return the result of polynomial evaluation.
    */
-    virtual Ciphertext<Element> EvalChebyshevSeries(ConstCiphertext<Element> ciphertext,
+    virtual Ciphertext<Element> EvalChebyshevSeries(ConstCiphertext<Element>& ciphertext,
+                                                    const std::vector<int64_t>& coefficients, double a,
+                                                    double b) const {
+        OPENFHE_THROW("Not implemented for this scheme");
+    }
+    virtual Ciphertext<Element> EvalChebyshevSeries(ConstCiphertext<Element>& ciphertext,
                                                     const std::vector<double>& coefficients, double a, double b) const {
-        OPENFHE_THROW("EvalChebyshevSeries is not supported for the scheme.");
+        OPENFHE_THROW("Not implemented for this scheme");
+    }
+    virtual Ciphertext<Element> EvalChebyshevSeries(ConstCiphertext<Element>& ciphertext,
+                                                    const std::vector<std::complex<double>>& coefficients, double a,
+                                                    double b) const {
+        OPENFHE_THROW("Not implemented for this scheme");
     }
 
-    virtual Ciphertext<Element> EvalChebyshevSeriesLinear(ConstCiphertext<Element> ciphertext,
+    virtual Ciphertext<Element> EvalChebyshevSeriesWithPrecomp(std::shared_ptr<seriesPowers<Element>> polys,
+                                                               const std::vector<int64_t>& coefficients) const {
+        OPENFHE_THROW("Not implemented for this scheme");
+    }
+    virtual Ciphertext<Element> EvalChebyshevSeriesWithPrecomp(std::shared_ptr<seriesPowers<Element>> polys,
+                                                               const std::vector<double>& coefficients) const {
+        OPENFHE_THROW("Not implemented for this scheme");
+    }
+    virtual Ciphertext<Element> EvalChebyshevSeriesWithPrecomp(
+        std::shared_ptr<seriesPowers<Element>> polys, const std::vector<std::complex<double>>& coefficients) const {
+        OPENFHE_THROW("Not implemented for this scheme");
+    }
+
+    virtual Ciphertext<Element> EvalChebyshevSeriesLinear(ConstCiphertext<Element>& ciphertext,
+                                                          const std::vector<int64_t>& coefficients, double a,
+                                                          double b) const {
+        OPENFHE_THROW("Not implemented for this scheme");
+    }
+    virtual Ciphertext<Element> EvalChebyshevSeriesLinear(ConstCiphertext<Element>& ciphertext,
                                                           const std::vector<double>& coefficients, double a,
                                                           double b) const {
-        OPENFHE_THROW("EvalChebyshevSeriesLinear is not supported for the scheme.");
+        OPENFHE_THROW("Not implemented for this scheme");
+    }
+    virtual Ciphertext<Element> EvalChebyshevSeriesLinear(ConstCiphertext<Element>& ciphertext,
+                                                          const std::vector<std::complex<double>>& coefficients,
+                                                          double a, double b) const {
+        OPENFHE_THROW("Not implemented for this scheme");
     }
 
-    virtual Ciphertext<Element> EvalChebyshevSeriesPS(ConstCiphertext<Element> ciphertext,
+    virtual Ciphertext<Element> EvalChebyshevSeriesPS(ConstCiphertext<Element>& ciphertext,
+                                                      const std::vector<int64_t>& coefficients, double a,
+                                                      double b) const {
+        OPENFHE_THROW("Not implemented for this scheme");
+    }
+    virtual Ciphertext<Element> EvalChebyshevSeriesPS(ConstCiphertext<Element>& ciphertext,
                                                       const std::vector<double>& coefficients, double a,
                                                       double b) const {
-        OPENFHE_THROW("EvalChebyshevSeriesPS is not supported for the scheme.");
+        OPENFHE_THROW("Not implemented for this scheme");
+    }
+    virtual Ciphertext<Element> EvalChebyshevSeriesPS(ConstCiphertext<Element>& ciphertext,
+                                                      const std::vector<std::complex<double>>& coefficients, double a,
+                                                      double b) const {
+        OPENFHE_THROW("Not implemented for this scheme");
     }
 
     //------------------------------------------------------------------------------
@@ -211,8 +364,8 @@ public:
    * @param privateKey private key.
    * @return returns the evaluation keys
    */
-    virtual std::shared_ptr<std::map<usint, EvalKey<Element>>> EvalSumKeyGen(const PrivateKey<Element> privateKey,
-                                                                             const PublicKey<Element> publicKey) const;
+    virtual std::shared_ptr<std::map<uint32_t, EvalKey<Element>>> EvalSumKeyGen(
+        const PrivateKey<Element> privateKey, const PublicKey<Element> publicKey) const;
 
     /**
    * Virtual function to generate the automorphism keys for EvalSumRows; works
@@ -224,9 +377,9 @@ public:
    * @param subringDim subring dimension (set to cyclotomic order if set to 0)
    * @return returns the evaluation keys
    */
-    virtual std::shared_ptr<std::map<usint, EvalKey<Element>>> EvalSumRowsKeyGen(const PrivateKey<Element> privateKey,
-                                                                                 usint rowSize, usint subringDim,
-                                                                                 std::vector<usint>& indices) const;
+    virtual std::shared_ptr<std::map<uint32_t, EvalKey<Element>>> EvalSumRowsKeyGen(
+        const PrivateKey<Element> privateKey, uint32_t rowSize, uint32_t subringDim,
+        std::vector<uint32_t>& indices) const;
 
     /**
    * Virtual function to generate the automorphism keys for EvalSumCols; works
@@ -236,8 +389,8 @@ public:
    * @param publicKey public key.
    * @return returns the evaluation keys
    */
-    virtual std::shared_ptr<std::map<usint, EvalKey<Element>>> EvalSumColsKeyGen(const PrivateKey<Element> privateKey,
-                                                                                 std::vector<usint>& indices) const;
+    virtual std::shared_ptr<std::map<uint32_t, EvalKey<Element>>> EvalSumColsKeyGen(
+        const PrivateKey<Element> privateKey, std::vector<uint32_t>& indices) const;
 
     /**
     * @brief Sums all elements in log (batch size) time - works only with packedvencoding
@@ -246,8 +399,8 @@ public:
     * @param evalKeys - reference to the map of evaluation keys generated by EvalAutomorphismKeyGen.
     * @return resulting ciphertext
     */
-    virtual Ciphertext<Element> EvalSum(ConstCiphertext<Element> ciphertext, usint batchSize,
-                                        const std::map<usint, EvalKey<Element>>& evalSumKeyMap) const;
+    virtual Ciphertext<Element> EvalSum(ConstCiphertext<Element> ciphertext, uint32_t batchSize,
+                                        const std::map<uint32_t, EvalKey<Element>>& evalSumKeyMap) const;
 
     /**
     * @brief Sums all elements over row-vectors in a matrix - works only with packed encoding.
@@ -288,8 +441,8 @@ public:
     * @return resulting ciphertext
     */
     virtual Ciphertext<Element> EvalInnerProduct(ConstCiphertext<Element> ciphertext1,
-                                                 ConstCiphertext<Element> ciphertext2, usint batchSize,
-                                                 const std::map<usint, EvalKey<Element>>& evalKeyMap,
+                                                 ConstCiphertext<Element> ciphertext2, uint32_t batchSize,
+                                                 const std::map<uint32_t, EvalKey<Element>>& evalKeyMap,
                                                  const EvalKey<Element> evalMultKey) const;
 
     /**
@@ -301,8 +454,8 @@ public:
     * @return resulting ciphertext
     */
     virtual Ciphertext<Element> EvalInnerProduct(ConstCiphertext<Element> ciphertext, ConstPlaintext plaintext,
-                                                 usint batchSize,
-                                                 const std::map<usint, EvalKey<Element>>& evalKeyMap) const;
+                                                 uint32_t batchSize,
+                                                 const std::map<uint32_t, EvalKey<Element>>& evalKeyMap) const;
 
     /**
    * Function to add random noise to all plaintext slots except for the first
@@ -324,7 +477,7 @@ public:
    * @return resulting ciphertext
    */
     virtual Ciphertext<Element> EvalMerge(const std::vector<Ciphertext<Element>>& ciphertextVector,
-                                          const std::map<usint, EvalKey<Element>>& evalKeyMap) const;
+                                          const std::map<uint32_t, EvalKey<Element>>& evalKeyMap) const;
 
     //------------------------------------------------------------------------------
     // LINEAR TRANSFORMATION
@@ -335,27 +488,27 @@ public:
     //------------------------------------------------------------------------------
 
 protected:
-    std::set<uint32_t> GenerateIndices_2n(usint batchSize, usint m) const;
+    std::set<uint32_t> GenerateIndices_2n(uint32_t batchSize, uint32_t m) const;
 
-    std::set<uint32_t> GenerateIndices2nComplex(usint batchSize, usint m) const;
+    std::set<uint32_t> GenerateIndices2nComplex(uint32_t batchSize, uint32_t m) const;
 
-    std::set<uint32_t> GenerateIndices2nComplexRows(usint rowSize, usint m) const;
+    std::set<uint32_t> GenerateIndices2nComplexRows(uint32_t rowSize, uint32_t m) const;
 
-    std::set<uint32_t> GenerateIndices2nComplexCols(usint batchSize, usint m) const;
+    std::set<uint32_t> GenerateIndices2nComplexCols(uint32_t batchSize, uint32_t m) const;
 
     std::set<uint32_t> GenerateIndexListForEvalSum(const PrivateKey<Element>& privateKey) const;
 
-    Ciphertext<Element> EvalSum_2n(ConstCiphertext<Element> ciphertext, usint batchSize, usint m,
-                                   const std::map<usint, EvalKey<Element>>& evalKeyMap) const;
+    Ciphertext<Element> EvalSum_2n(ConstCiphertext<Element> ciphertext, uint32_t batchSize, uint32_t m,
+                                   const std::map<uint32_t, EvalKey<Element>>& evalKeyMap) const;
 
-    Ciphertext<Element> EvalSum2nComplex(ConstCiphertext<Element> ciphertext, usint batchSize, usint m,
-                                         const std::map<usint, EvalKey<Element>>& evalKeyMap) const;
+    Ciphertext<Element> EvalSum2nComplex(ConstCiphertext<Element> ciphertext, uint32_t batchSize, uint32_t m,
+                                         const std::map<uint32_t, EvalKey<Element>>& evalKeyMap) const;
 
-    Ciphertext<Element> EvalSum2nComplexRows(ConstCiphertext<Element> ciphertext, usint rowSize, usint m,
-                                             const std::map<usint, EvalKey<Element>>& evalKeyMap) const;
+    Ciphertext<Element> EvalSum2nComplexRows(ConstCiphertext<Element> ciphertext, uint32_t rowSize, uint32_t m,
+                                             const std::map<uint32_t, EvalKey<Element>>& evalKeyMap) const;
 
-    Ciphertext<Element> EvalSum2nComplexCols(ConstCiphertext<Element> ciphertext, usint batchSize, usint m,
-                                             const std::map<usint, EvalKey<Element>>& evalKeyMap) const;
+    Ciphertext<Element> EvalSum2nComplexCols(ConstCiphertext<Element> ciphertext, uint32_t batchSize, uint32_t m,
+                                             const std::map<uint32_t, EvalKey<Element>>& evalKeyMap) const;
 };
 
 }  // namespace lbcrypto

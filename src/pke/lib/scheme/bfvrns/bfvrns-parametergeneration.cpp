@@ -40,12 +40,16 @@ BFV implementation. See https://eprint.iacr.org/2021/204 for details.
 #include "scheme/bfvrns/bfvrns-parametergeneration.h"
 #include "scheme/scheme-utils.h"
 
+#include <vector>
+#include <memory>
+#include <string>
+
 namespace lbcrypto {
 
-bool ParameterGenerationBFVRNS::ParamsGenBFVRNS(std::shared_ptr<CryptoParametersBase<DCRTPoly>> cryptoParams,
-                                                uint32_t evalAddCount, uint32_t multiplicativeDepth,
-                                                uint32_t keySwitchCount, size_t dcrtBits, uint32_t nCustom,
-                                                uint32_t numDigits) const {
+bool ParameterGenerationBFVRNS::ParamsGenBFVRNSInternal(std::shared_ptr<CryptoParametersBase<DCRTPoly>> cryptoParams,
+                                                        uint32_t evalAddCount, uint32_t multiplicativeDepth,
+                                                        uint32_t keySwitchCount, size_t dcrtBits, uint32_t nCustom,
+                                                        uint32_t numDigits) const {
     if (!cryptoParams)
         OPENFHE_THROW("No crypto parameters are supplied to BFVrns ParamsGen");
 
@@ -97,15 +101,20 @@ bool ParameterGenerationBFVRNS::ParamsGenBFVRNS(std::shared_ptr<CryptoParameters
         distType = HEStd_ternary;
     }
 
-    // expansion factor delta
+    // expansion factor delta for a multiplication of a Gaussian polynomial by a random polynomial
     auto delta = [](uint32_t n) -> double {
         return (2. * std::sqrt(n));
+    };
+
+    // expansion factor delta for modulus switching
+    auto deltaMS = [](uint32_t n) -> double {
+        return (4. * std::sqrt(n));
     };
 
     // norm of fresh ciphertext polynomial (for EXTENDED the noise is reduced to modulus switching noise)
     auto Vnorm = [&](uint32_t n) -> double {
         if (encTech == EXTENDED)
-            return (1. + delta(n) * Bkey) / 2.;
+            return (1. + deltaMS(n) * Bkey) / 2.;
         else
             return Berr * (1. + 2. * delta(n) * Bkey);
     };
@@ -125,7 +134,8 @@ bool ParameterGenerationBFVRNS::ParamsGenBFVRNS(std::shared_ptr<CryptoParameters
                 uint32_t k = static_cast<uint32_t>(std::ceil(std::ceil(logq) / dcrtBits));
                 // set the number of digits
                 uint32_t numPartQ = ComputeNumLargeDigits(numDigits, k - 1);
-                auto hybridKSInfo = CryptoParametersRNS::EstimateLogP(numPartQ, dcrtBits, dcrtBits, 0, k, auxBits);
+                auto hybridKSInfo =
+                    CryptoParametersRNS::EstimateLogP(numPartQ, dcrtBits, dcrtBits, 0, k, auxBits, scalTech);
                 logq += std::get<0>(hybridKSInfo);
             }
             return static_cast<double>(
@@ -139,7 +149,11 @@ bool ParameterGenerationBFVRNS::ParamsGenBFVRNS(std::shared_ptr<CryptoParameters
             // iterative approximations; we do not know the number
             // of digits and moduli at this point and use upper bounds
             double numTowers = std::ceil(logqPrev / dcrtBits);
-            return numTowers * (delta(n) * Berr + delta(n) * Bkey + 1.0) / 2.0;
+#if defined(WITH_REDUCED_NOISE)
+            return numTowers * (delta(n) * Berr + deltaMS(n) * Bkey + 1.0) / 2.0;
+#else
+            return numTowers * (delta(n) * Berr + deltaMS(n) * Bkey + 1.0);
+#endif
         }
         else {
             double numDigitsPerTower = (digitSize == 0) ? 1 : ((dcrtBits / digitSize) + 1);
@@ -240,12 +254,12 @@ bool ParameterGenerationBFVRNS::ParamsGenBFVRNS(std::shared_ptr<CryptoParameters
 
         // function used in the EvalMult constraint
         auto C1 = [&](uint32_t n) -> double {
-            return delta(n) * delta(n) * p * Bkey;
+            return delta(n) * deltaMS(n) * p * Bkey;
         };
 
         // function used in the EvalMult constraint
         auto C2 = [&](uint32_t n, double logqPrev) -> double {
-            return delta(n) * delta(n) * Bkey * Bkey / 2.0 + noiseKS(n, logqPrev, w, true);
+            return delta(n) * deltaMS(n) * Bkey * Bkey / 2.0 + noiseKS(n, logqPrev, w, true);
         };
 
         // main correctness constraint

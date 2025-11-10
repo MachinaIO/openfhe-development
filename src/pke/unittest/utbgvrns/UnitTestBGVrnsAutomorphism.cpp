@@ -39,11 +39,12 @@
 #include <unordered_map>
 #include "gtest/gtest.h"
 
+#if !defined(__EMSCRIPTEN__)
 using namespace lbcrypto;
 class Params;
 
 //===========================================================================================================
-enum TEST_CASE_TYPE {
+enum TEST_CASE_TYPE : int {
     BGVRNS_AUTOMORPHISM = 0,
     EVAL_AT_INDX_PACKED_ARRAY,
     EVAL_SUM_PACKED_ARRAY,
@@ -413,3 +414,4 @@ TEST_P(UTBGVRNS_AUTOMORPHISM, Automorphism) {
 
 INSTANTIATE_TEST_SUITE_P(UnitTests, UTBGVRNS_AUTOMORPHISM, ::testing::ValuesIn(testCasesUTBGVRNS_AUTOMORPHISM),
                          testName);
+#endif // __EMSCRIPTEN__

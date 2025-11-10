@@ -39,7 +39,7 @@
 using namespace lbcrypto;
 
 //===========================================================================================================
-enum TEST_CASE_TYPE {
+enum TEST_CASE_TYPE : int {
     EVAL_MULT_ERROR_HANDLING = 0,
     EVAL_MULT_MANY_ERROR_HANDLING,
     RELIN_TEST,
@@ -112,7 +112,7 @@ static std::ostream& operator<<(std::ostream& os, const TEST_CASE_UTGENERAL_EVAL
     return os << test.toString();
 }
 //===========================================================================================================
-#if NATIVEINT == 128 && !defined(__EMSCRIPTEN__)
+#if NATIVEINT == 128
 constexpr usint SCALE = 78;
 #else
 constexpr usint SCALE = 50;
@@ -580,7 +580,7 @@ protected:
             // EvalMult Operation
             ////////////////////////////////////////////////////////////
             // Perform consecutive multiplications and do a keyswtiching at the end.
-            auto ciphertextMul12 = cryptoContext->EvalMultNoRelin(ciphertext1, ciphertext2);
+            auto ciphertextMul12 = cryptoContext->EvalMultNoRelinNoCheck(ciphertext1, ciphertext2);
             auto ciphertextMult  = cryptoContext->Relinearize(ciphertextMul12);
 
             ////////////////////////////////////////////////////////////

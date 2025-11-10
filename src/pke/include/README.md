@@ -28,6 +28,7 @@
     - Ring Learning with Error (GAUSSIAN)
     - Optimized (UNIFORM_TERNARY)
     - Sparse (SPARSE_TERNARY; Hamming weight is 192)
+    - Sparse encapsulated (SPARSE_ENCAPSULATED; Hamming weight of 32 for the key used in bootstrapping and 192 for other operations)
 
   - Scaling Technique
     - Fixed Manual (FIXEDMANUAL)

@@ -43,7 +43,7 @@
 using namespace lbcrypto;
 
 //===========================================================================================================
-enum TEST_CASE_TYPE {
+enum TEST_CASE_TYPE : int {
     EVAL_AT_INDX_PACKED_ARRAY = 0,
     EVAL_SUM_PACKED_ARRAY,
     EVAL_SUM_ROWS,

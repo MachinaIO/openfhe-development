@@ -44,7 +44,7 @@
 using namespace lbcrypto;
 
 //===========================================================================================================
-enum TEST_CASE_TYPE {
+enum TEST_CASE_TYPE : int {
     RE_ENCRYPT = 0,
 };
 

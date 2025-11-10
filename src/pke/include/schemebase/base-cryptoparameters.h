@@ -31,10 +31,9 @@
 #ifndef LBCRYPTO_CRYPTO_BASE_CRYPTOPARAMETERS_H
 #define LBCRYPTO_CRYPTO_BASE_CRYPTOPARAMETERS_H
 
-#include "utils/serializable.h"
-#include "encoding/plaintext.h"
-
 #include "encoding/encodings.h"
+#include "encoding/plaintext.h"
+#include "utils/serializable.h"
 
 #include <memory>
 #include <string>
@@ -59,17 +58,23 @@ class CryptoParametersBase : public Serializable {
     using TugType  = typename Element::TugType;
 
 public:
-    CryptoParametersBase() {}
+    CryptoParametersBase() = default;
 
-    virtual ~CryptoParametersBase() {}
+    virtual ~CryptoParametersBase() = default;
 
+    // NOTE: some getters and setters are declared "virtual" as they should be overriden and disabled in
+    // some scheme-specific parameter classes derived from CryptoParametersBase
     /**
    * Returns the value of plaintext modulus p
    *
    * @return the plaintext modulus.
    */
-    virtual const PlaintextModulus& GetPlaintextModulus() const {
+    virtual PlaintextModulus GetPlaintextModulus() const {
         return m_encodingParams->GetPlaintextModulus();
+    }
+
+    uint32_t GetBatchSize() const {
+        return m_encodingParams->GetBatchSize();
     }
 
     /**
@@ -77,8 +82,12 @@ public:
    *
    * @return the ring element parameters.
    */
-    virtual const std::shared_ptr<typename Element::Params> GetElementParams() const {
+    const std::shared_ptr<typename Element::Params> GetElementParams() const {
         return m_params;
+    }
+
+    uint32_t GetRingDimension() const {
+        return m_params->GetRingDimension();
     }
 
     virtual const std::shared_ptr<typename Element::Params> GetParamsPK() const = 0;
@@ -88,22 +97,27 @@ public:
    *
    * @return the encoding parameters.
    */
-    virtual const EncodingParams GetEncodingParams() const {
+    const EncodingParams GetEncodingParams() const {
         return m_encodingParams;
     }
 
     /**
    * Sets the value of plaintext modulus p
    */
-    virtual void SetPlaintextModulus(const PlaintextModulus& plaintextModulus) {
+    void SetPlaintextModulus(PlaintextModulus plaintextModulus) {
         m_encodingParams->SetPlaintextModulus(plaintextModulus);
     }
 
-    virtual bool operator==(const CryptoParametersBase<Element>& cmp) const {
-        return *m_encodingParams == *(cmp.GetEncodingParams()) && *m_params == *(cmp.GetElementParams());
+    void SetBatchSize(uint32_t batchSize) {
+        m_encodingParams->SetBatchSize(batchSize);
     }
-    virtual bool operator!=(const CryptoParametersBase<Element>& cmp) const {
-        return !(*this == cmp);
+
+    bool operator==(const CryptoParametersBase<Element>& rhs) const {
+        return CompareTo(rhs);
+    }
+
+    bool operator!=(const CryptoParametersBase<Element>& rhs) const {
+        return !(*this == rhs);
     }
 
     /**
@@ -119,7 +133,7 @@ public:
         return out;
     }
 
-    virtual usint GetDigitSize() const {
+    virtual uint32_t GetDigitSize() const {
         return 0;
     }
 
@@ -167,7 +181,7 @@ public:
         ar(::cereal::make_nvp("enp", m_encodingParams));
     }
 
-    std::string SerializedObjectName() const {
+    std::string SerializedObjectName() const override {
         return "CryptoParametersBase";
     }
     static uint32_t SerializedVersion() {
@@ -194,12 +208,21 @@ protected:
         m_params = newElemParms;
     }
 
+    /**
+    * @brief CompareTo() is a method to compare two CryptoParametersBase objects. It is called by operator==()
+    *
+    * @param rhs - the other CryptoParametersBase object to compare to.
+    * @return whether the two CryptoParametersBase objects are equivalent.
+    */
+    virtual bool CompareTo(const CryptoParametersBase<Element>& rhs) const {
+        return (*m_encodingParams == *(rhs.m_encodingParams) && *m_params == *(rhs.m_params));
+    }
+
     virtual void PrintParameters(std::ostream& out) const {
         out << "Element Parameters: " << *m_params << std::endl;
         out << "Encoding Parameters: " << *m_encodingParams << std::endl;
     }
 
-protected:
     // element-specific parameters
     std::shared_ptr<typename Element::Params> m_params;
 

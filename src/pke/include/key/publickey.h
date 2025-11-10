@@ -36,13 +36,13 @@
 #ifndef LBCRYPTO_CRYPTO_KEY_PUBLICKEY_H
 #define LBCRYPTO_CRYPTO_KEY_PUBLICKEY_H
 
-#include "key/publickey-fwd.h"
 #include "key/key.h"
+#include "key/publickey-fwd.h"
 
 #include <memory>
-#include <vector>
 #include <string>
 #include <utility>
+#include <vector>
 
 /**
  * @namespace lbcrypto
@@ -56,21 +56,26 @@ namespace lbcrypto {
  */
 template <typename Element>
 class PublicKeyImpl : public Key<Element> {
+private:
+    std::vector<Element> m_h;
+
 public:
+    PublicKeyImpl() = default;
+
     /**
    * Basic constructor
    *
    * @param cc - CryptoContext
    * @param id - key identifier
    */
-    explicit PublicKeyImpl(CryptoContext<Element> cc = 0, const std::string& id = "") : Key<Element>(cc, id) {}
+    explicit PublicKeyImpl(const CryptoContext<Element>& cc, const std::string& id = "") : Key<Element>(cc, id) {}
 
     /**
    * Copy constructor
    *
    *@param &rhs PublicKeyImpl to copy from
    */
-    explicit PublicKeyImpl(const PublicKeyImpl<Element>& rhs)
+    PublicKeyImpl(const PublicKeyImpl<Element>& rhs)
         : Key<Element>(rhs.GetCryptoContext(), rhs.GetKeyTag()), m_h(rhs.m_h) {}
 
     /**
@@ -78,7 +83,7 @@ public:
    *
    *@param &rhs PublicKeyImpl to move from
    */
-    explicit PublicKeyImpl(PublicKeyImpl<Element>&& rhs) noexcept
+    PublicKeyImpl(PublicKeyImpl<Element>&& rhs) noexcept
         : Key<Element>(rhs.GetCryptoContext(), rhs.GetKeyTag()), m_h(std::move(rhs.m_h)) {}
 
     operator bool() const {
@@ -92,7 +97,7 @@ public:
    */
     PublicKeyImpl<Element>& operator=(const PublicKeyImpl<Element>& rhs) {
         CryptoObject<Element>::operator=(rhs);
-        this->m_h = rhs.m_h;
+        m_h = rhs.m_h;
         return *this;
     }
 
@@ -101,8 +106,8 @@ public:
    *
    * @param &rhs PublicKeyImpl to copy from
    */
-    PublicKeyImpl<Element>& operator=(PublicKeyImpl<Element>&& rhs) {
-        CryptoObject<Element>::operator=(rhs);
+    PublicKeyImpl<Element>& operator=(PublicKeyImpl<Element>&& rhs) noexcept {
+        CryptoObject<Element>::operator=(std::move(rhs));
         m_h = std::move(rhs.m_h);
         return *this;
     }
@@ -114,7 +119,7 @@ public:
    * @return the public key element.
    */
     const std::vector<Element>& GetPublicElements() const {
-        return this->m_h;
+        return m_h;
     }
 
     // @Set Properties
@@ -131,42 +136,12 @@ public:
    * Sets the public key vector of Element.
    * @param &&element is the public key Element vector to be moved.
    */
-    void SetPublicElements(std::vector<Element>&& element) {
+    void SetPublicElements(std::vector<Element>&& element) noexcept {
         m_h = std::move(element);
     }
 
-    /**
-   * Sets the public key Element at index idx.
-   * @param &element is the public key Element to be copied.
-   */
-    void SetPublicElementAtIndex(usint idx, const Element& element) {
-        m_h.insert(m_h.begin() + idx, element);
-    }
-
-    /**
-   * Sets the public key Element at index idx.
-   * @param &&element is the public key Element to be moved.
-   */
-    void SetPublicElementAtIndex(usint idx, Element&& element) {
-        m_h.insert(m_h.begin() + idx, std::move(element));
-    }
-
-    bool operator==(const PublicKeyImpl& other) const {
-        if (!CryptoObject<Element>::operator==(other)) {
-            return false;
-        }
-
-        if (m_h.size() != other.m_h.size()) {
-            return false;
-        }
-
-        for (size_t i = 0; i < m_h.size(); i++) {
-            if (m_h[i] != other.m_h[i]) {
-                return false;
-            }
-        }
-
-        return true;
+    bool operator==(const PublicKeyImpl& rhs) const {
+        return CryptoObject<Element>::operator==(rhs) && m_h == rhs.m_h;
     }
 
     bool operator!=(const PublicKeyImpl& other) const {
@@ -189,15 +164,13 @@ public:
         ar(::cereal::make_nvp("h", m_h));
     }
 
-    std::string SerializedObjectName() const {
+    std::string SerializedObjectName() const override {
         return "PublicKey";
     }
+
     static uint32_t SerializedVersion() {
         return 1;
     }
-
-private:
-    std::vector<Element> m_h;
 };
 
 }  // namespace lbcrypto

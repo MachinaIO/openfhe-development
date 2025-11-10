@@ -45,7 +45,7 @@
 using namespace lbcrypto;
 
 //===========================================================================================================
-enum TEST_CASE_TYPE { NOISE_ESTIMATION, FULL_NOISE_FLOODING, MULTIPARTY_NOISE_FLOODING };
+enum TEST_CASE_TYPE : int { NOISE_ESTIMATION, FULL_NOISE_FLOODING, MULTIPARTY_NOISE_FLOODING };
 
 static std::ostream& operator<<(std::ostream& os, const TEST_CASE_TYPE& type) {
     std::string typeName;

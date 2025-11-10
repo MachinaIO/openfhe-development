@@ -32,11 +32,12 @@
 #ifndef _CKKSRNS_UTILS_H_
 #define _CKKSRNS_UTILS_H_
 
-#include <vector>
+#include "utils/exception.h"
+
 #include <complex>
-#include <iostream>
-#include <stdint.h>
 #include <memory>
+#include <stdint.h>
+#include <vector>
 
 /*
  * Subroutines used by the linear transformation homomorphic capability
@@ -44,13 +45,36 @@
 
 namespace lbcrypto {
 
+template <typename VecDType>
 struct longDiv {
-    std::vector<double> q;
-    std::vector<double> r;
-
-    longDiv() {}
-    longDiv(const std::vector<double>& q0, const std::vector<double>& r0) : q(q0), r(r0) {}
+    std::vector<VecDType> q;
+    std::vector<VecDType> r;
+    longDiv() = default;
+    longDiv(const std::vector<VecDType>& q0, const std::vector<VecDType>& r0) : q(q0), r(r0) {}
 };
+
+inline bool IsNotEqualOne(double v, double delta = 0x1p-44) {
+    return std::abs(v - 1.0) > delta;
+}
+inline bool IsNotEqualZero(double v, double delta = 0x1p-44) {
+    return std::abs(v) > delta;
+}
+inline bool IsNotEqualOne(std::complex<double> val, double delta = 0x1p-44) {
+    return IsNotEqualOne(val.real(), delta) || IsNotEqualZero(val.imag(), delta);
+}
+inline bool IsNotEqualZero(std::complex<double> val, double delta = 0x1p-44) {
+    return IsNotEqualZero(val.real(), delta) || IsNotEqualZero(val.imag(), delta);
+}
+
+inline double ToReal(double val) {
+    return val;
+}
+inline double ToReal(int64_t val) {
+    return static_cast<double>(val);
+}
+inline double ToReal(std::complex<double> val) {
+    return val.real();
+}
 
 /**
  * @brief Gets the degree of a polynomial specified by its coefficients, which is the index of
@@ -58,7 +82,17 @@ struct longDiv {
  * @param coefficients vector of coefficients of a polynomial (can not be empty)
  * @return the integer degree of the polynomial.
  */
-uint32_t Degree(const std::vector<double>& coefficients);
+template <typename VecDType>
+uint32_t Degree(const std::vector<VecDType>& coefficients, double delta = 0.0) {
+    uint32_t i = coefficients.size();
+    if (i == 0)
+        OPENFHE_THROW("Coefficients vector can not be empty");
+    while (i > 0) {
+        if (IsNotEqualZero(coefficients[--i], delta))
+            break;
+    }
+    return i;
+}
 
 /**
  * Computes the quotient and remainder of the long division of two polynomials in the power series basis.
@@ -67,7 +101,8 @@ uint32_t Degree(const std::vector<double>& coefficients);
  * @param &g the vector of coefficients of the divisor.
  * @return a struct with the coefficients for the quotient and remainder.
  */
-std::shared_ptr<longDiv> LongDivisionPoly(const std::vector<double>& f, const std::vector<double>& g);
+template <typename VecDType>
+std::shared_ptr<longDiv<VecDType>> LongDivisionPoly(const std::vector<VecDType>& f, const std::vector<VecDType>& g);
 
 /**
  * Computes the quotient and remainder of the long division of two polynomials in the Chebyshev series basis
@@ -76,7 +111,9 @@ std::shared_ptr<longDiv> LongDivisionPoly(const std::vector<double>& f, const st
  * @param &g the vector of coefficients of the divisor.
  * @return a struct with the coefficients for the quotient and remainder.
  */
-std::shared_ptr<longDiv> LongDivisionChebyshev(const std::vector<double>& f, const std::vector<double>& g);
+template <typename VecDType>
+std::shared_ptr<longDiv<VecDType>> LongDivisionChebyshev(const std::vector<VecDType>& f,
+                                                         const std::vector<VecDType>& g);
 
 /**
  * Computes the values of the internal degrees k and m needed in the Paterson-Stockmeyer algorithm
@@ -85,7 +122,9 @@ std::shared_ptr<longDiv> LongDivisionChebyshev(const std::vector<double>& f, con
  * @param n the degree of a polynomial.
  * @return a vector containing k and m.
  */
-std::vector<uint32_t> ComputeDegreesPS(const uint32_t n);
+std::vector<uint32_t> ComputeDegreesPS(uint32_t n);
+
+uint32_t GetDepthByDegree(size_t degree);
 
 /**
  * Get the depth for a given vector of coefficients for the Paterson-Stockmeyer algorithm.
@@ -95,7 +134,12 @@ std::vector<uint32_t> ComputeDegreesPS(const uint32_t n);
  * @param isNormalized true if the vector normalized. false is the default value
  * @return multiplicative depth
  */
-uint32_t GetMultiplicativeDepthByCoeffVector(const std::vector<double>& vec, bool isNormalized = false);
+template <typename VecDType>
+uint32_t GetMultiplicativeDepthByCoeffVector(const std::vector<VecDType>& vec, bool isNormalized = false) {
+    if (vec.size() == 0)
+        OPENFHE_THROW("Cannot perform operation on empty vector. vec.size() == 0");
+    return GetDepthByDegree(vec.size() - 1) - isNormalized;
+}
 
 /**
  * Extracts shifted diagonal of matrix A.
@@ -106,7 +150,7 @@ uint32_t GetMultiplicativeDepthByCoeffVector(const std::vector<double>& vec, boo
  * @return the vector corresponding to the shifted diagonal
  */
 std::vector<std::complex<double>> ExtractShiftedDiagonal(const std::vector<std::vector<std::complex<double>>>& A,
-                                                         int index);
+                                                         int i);
 
 /**
  * Rotates a vector by an index - left rotation
@@ -116,17 +160,38 @@ std::vector<std::complex<double>> ExtractShiftedDiagonal(const std::vector<std::
  *
  * @return the rotated vector
  */
-std::vector<std::complex<double>> Rotate(const std::vector<std::complex<double>>& a, int32_t index);
+template <typename VecDType>
+std::vector<VecDType> Rotate(const std::vector<VecDType>& a, int32_t index);
 
 /**
- * Clones the current vector up to the size indicated by the "slote" variable
+ * Rotates a vector by an index - left rotation
+ *
+ * @param &a vector map.
+ * @param index rotation index.
+ *
+ * @return the rotated vector, mimicking the BFV subring rotations
+ */
+template <typename VecDType>
+std::vector<VecDType> RotateTwoHalves(const std::vector<VecDType>& a, int32_t index);
+
+/**
+ * Clones the current vector up to the size indicated by the 'slots' variable
  *
  * @param &a square linear map.
  * @param slots the new size of the vector.
  *
  * @return the vector with cloned values
  */
-std::vector<std::complex<double>> Fill(const std::vector<std::complex<double>>& a, int slots);
+template <typename VecDType = std::vector<std::complex<double>>>
+std::vector<VecDType> Fill(const std::vector<VecDType>& a, uint32_t slots);
+
+template <typename VecDType = std::vector<std::complex<double>>>
+std::vector<VecDType> Fill(std::initializer_list<VecDType> a, uint32_t slots);
+
+/*
+template <typename VecDType = std::complex<double>>
+std::vector<VecDType> Fill(const std::vector<VecDType>& a, uint32_t slots);
+*/
 
 /**
  * Computes the coefficients for the FFT encoding for CoeffEncodingCollapse such that every
@@ -187,17 +252,6 @@ std::vector<std::vector<std::vector<std::complex<double>>>> CoeffDecodingCollaps
 uint32_t ReduceRotation(int32_t index, uint32_t slots);
 
 /**
- * Computes parameters to ensure the encoding and decoding computations take exactly the
- * specified number of levels. More specifically, it returns a vector than contains
- * layers (the number of layers to collapse in one level), rows (how many such levels),
- * rem (the number of layers remaining to be collapsed in one level)
- *
- * @param logSlots the base 2 logarithm of the number of slots.
- * @param budget the allocated level budget for the computation.
- */
-std::vector<uint32_t> SelectLayers(uint32_t logSlots, uint32_t budget = 4);
-
-/**
  * Computes all parameters needed for the homomorphic encoding and decoding in the bootstrapping
  * operation and returns them as a vector. The returned vector's data can be accessed using
  * enum'ed indices from CKKS_BOOT_PARAMS that are defined below.
@@ -238,9 +292,8 @@ std::vector<int32_t> FindLTRotationIndicesSwitch(uint32_t dim1, uint32_t m, uint
 std::vector<int32_t> FindLTRotationIndicesSwitchArgmin(uint32_t m, uint32_t blockDimension, uint32_t cols);
 
 namespace CKKS_BOOT_PARAMS {
-/**
-   * Enums representing indices for the vector returned by GetCollapsedFFTParams()
-   */
+
+// Enums representing indices for the vector returned by GetCollapsedFFTParams()
 enum {
     LEVEL_BUDGET,  // the level budget
     LAYERS_COLL,   // the number of layers to collapse in one level

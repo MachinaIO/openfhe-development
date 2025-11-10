@@ -36,12 +36,12 @@
 #ifndef LBCRYPTO_CRYPTO_KEY_PRIVATEKEY_H
 #define LBCRYPTO_CRYPTO_KEY_PRIVATEKEY_H
 
-#include "key/privatekey-fwd.h"
 #include "key/key.h"
+#include "key/privatekey-fwd.h"
 
 #include <iomanip>
-#include <memory>
 #include <limits>
+#include <memory>
 #include <string>
 #include <utility>
 
@@ -71,31 +71,33 @@ inline std::string GenerateUniqueKeyID() {
  */
 template <class Element>
 class PrivateKeyImpl : public Key<Element> {
+private:
+    Element m_sk;
+
 public:
     /**
    * Construct in context
    */
-    explicit PrivateKeyImpl(CryptoContext<Element> cc = 0) : Key<Element>(cc, GenerateUniqueKeyID()) {}
+    PrivateKeyImpl() = default;
+
+    explicit PrivateKeyImpl(const CryptoContext<Element>& cc) : Key<Element>(cc, GenerateUniqueKeyID()) {}
 
     /**
    * Copy constructor
    *@param &rhs the PrivateKeyImpl to copy from
    */
-    explicit PrivateKeyImpl(const PrivateKeyImpl<Element>& rhs)
-        : Key<Element>(rhs.GetCryptoContext(), rhs.GetKeyTag()) {
-        this->m_sk = rhs.m_sk;
-    }
+    PrivateKeyImpl(const PrivateKeyImpl<Element>& rhs)
+        : Key<Element>(rhs.GetCryptoContext(), rhs.GetKeyTag()), m_sk(rhs.m_sk) {}
 
     /**
    * Move constructor
    *@param &rhs the PrivateKeyImpl to move from
    */
-    explicit PrivateKeyImpl(PrivateKeyImpl<Element>&& rhs) : Key<Element>(rhs.GetCryptoContext(), rhs.GetKeyTag()) {
-        this->m_sk = std::move(rhs.m_sk);
-    }
+    PrivateKeyImpl(PrivateKeyImpl<Element>&& rhs) noexcept
+        : Key<Element>(rhs.GetCryptoContext(), rhs.GetKeyTag()), m_sk(std::move(rhs.m_sk)) {}
 
     operator bool() const {
-        return static_cast<bool>(this->context);
+        return this->context != nullptr;
     }
 
     /**
@@ -104,9 +106,9 @@ public:
    * @param &rhs PrivateKeyto assign from.
    * @return the resulting PrivateKeyImpl
    */
-    const PrivateKeyImpl<Element>& operator=(const PrivateKeyImpl<Element>& rhs) {
+    PrivateKeyImpl<Element>& operator=(const PrivateKeyImpl<Element>& rhs) {
         CryptoObject<Element>::operator=(rhs);
-        this->m_sk = rhs.m_sk;
+        m_sk = rhs.m_sk;
         return *this;
     }
 
@@ -116,9 +118,9 @@ public:
    * @param &rhs PrivateKeyImpl to assign from.
    * @return the resulting PrivateKeyImpl
    */
-    const PrivateKeyImpl<Element>& operator=(PrivateKeyImpl<Element>&& rhs) {
-        CryptoObject<Element>::operator=(rhs);
-        this->m_sk = std::move(rhs.m_sk);
+    PrivateKeyImpl<Element>& operator=(PrivateKeyImpl<Element>&& rhs) noexcept {
+        CryptoObject<Element>::operator=(std::move(rhs));
+        m_sk = std::move(rhs.m_sk);
         return *this;
     }
 
@@ -142,7 +144,7 @@ public:
    * Set accessor for private element.
    * @private &x private element to set to.
    */
-    void SetPrivateElement(Element&& x) {
+    void SetPrivateElement(Element&& x) noexcept {
         m_sk = std::move(x);
     }
 
@@ -170,15 +172,13 @@ public:
         ar(::cereal::make_nvp("s", m_sk));
     }
 
-    std::string SerializedObjectName() const {
+    std::string SerializedObjectName() const override {
         return "PrivateKey";
     }
+
     static uint32_t SerializedVersion() {
         return 1;
     }
-
-private:
-    Element m_sk;
 };
 
 }  // namespace lbcrypto

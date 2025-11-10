@@ -49,7 +49,7 @@
 using namespace lbcrypto;
 
 //===========================================================================================================
-enum TEST_CASE_TYPE {
+enum TEST_CASE_TYPE : int {
     CONTEXT = 0,
     KEYS_AND_CIPHERTEXTS,
 };

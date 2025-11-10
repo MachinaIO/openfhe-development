@@ -32,39 +32,40 @@
 #include "lattice/constants-lattice.h"
 #include "utils/exception.h"
 
-#include <string>
 #include <ostream>
+#include <string>
 
 namespace lbcrypto {
 
 SecretKeyDist convertToSecretKeyDist(const std::string& str) {
     if (str == "GAUSSIAN")
         return GAUSSIAN;
-    else if (str == "UNIFORM_TERNARY")
+    if (str == "UNIFORM_TERNARY")
         return UNIFORM_TERNARY;
-    else if (str == "SPARSE_TERNARY")
+    if (str == "SPARSE_TERNARY")
         return SPARSE_TERNARY;
-    // else if (str == "BINARY")
+    if (str == "SPARSE_ENCAPSULATED")
+        return SPARSE_ENCAPSULATED;
+    // if (str == "BINARY")
     //     return BINARY;
-
-    std::string errMsg(std::string("Unknown SecretKeyDist ") + str);
-    OPENFHE_THROW(errMsg);
+    OPENFHE_THROW("Unknown SecretKeyDist: " + str);
 }
+
 SecretKeyDist convertToSecretKeyDist(uint32_t num) {
     auto keyDist = static_cast<SecretKeyDist>(num);
     switch (keyDist) {
         case GAUSSIAN:
         case UNIFORM_TERNARY:
         case SPARSE_TERNARY:
+        case SPARSE_ENCAPSULATED:
             // case BINARY:
             return keyDist;
         default:
             break;
     }
-
-    std::string errMsg(std::string("Unknown value for SecretKeyDist ") + std::to_string(num));
-    OPENFHE_THROW(errMsg);
+    OPENFHE_THROW("Unknown value for SecretKeyDist " + std::to_string(num));
 }
+
 std::ostream& operator<<(std::ostream& s, SecretKeyDist m) {
     switch (m) {
         case GAUSSIAN:
@@ -76,9 +77,12 @@ std::ostream& operator<<(std::ostream& s, SecretKeyDist m) {
         case SPARSE_TERNARY:
             s << "SPARSE_TERNARY";
             break;
+        case SPARSE_ENCAPSULATED:
+            s << "SPARSE_ENCAPSULATED";
+            break;
             // case BINARY:
             //     s << "BINARY";
-            break;
+            // break;
         default:
             s << "UNKNOWN";
             break;

@@ -44,6 +44,35 @@ using namespace testing;
 static string lead = "****** ";
 
 class MinimalistPrinter : public EmptyTestEventListener {
+    // in modern GoogleTest (v1.11+ or v1.17.0) internal::COLOR_GREEN and internal::ColoredPrintf(...) are no longer accessible, so
+    enum class Color { kDefault, kRed, kGreen };
+
+    void ColoredPrintf(Color color, const char* fmt, ...) {
+        const char* color_code = "";
+        switch (color) {
+            case Color::kRed:
+                color_code = "\033[1;31m";
+                break;
+            case Color::kGreen:
+                color_code = "\033[1;32m";
+                break;
+            case Color::kDefault:
+            default:
+                color_code = "\033[0m";
+                break;
+        }
+
+        printf("%s", color_code);
+
+        va_list args;
+        va_start(args, fmt);
+        vprintf(fmt, args);
+        va_end(args);
+
+        printf("\033[0m");  // reset color
+        fflush(stdout);
+    }
+
 public:
     void OnTestProgramStart(const ::testing::UnitTest& unit_test) {
         cout << lead << "OpenFHE Version " << GetOPENFHEVersion() << endl;
@@ -71,7 +100,7 @@ public:
             if (pr.passed())
                 continue;
 
-            internal::ColoredPrintf(internal::COLOR_GREEN, "[ RUN      ] ");
+            ColoredPrintf(Color::kGreen, "[ RUN      ] ");
             printf("%s.%s\n", test_info.test_case_name(), test_info.name());
             fflush(stdout);
 
@@ -81,7 +110,7 @@ public:
 
             cout << pr.summary() << endl;
 
-            internal::ColoredPrintf(internal::COLOR_RED, "[  FAILED  ] ");
+            ColoredPrintf(Color::kRed, "[  FAILED  ] ");
             printf("%s.%s\n", test_info.test_case_name(), test_info.name());
             fflush(stdout);
             internal::PrintFullTestCommentIfPresent(test_info);
@@ -111,7 +140,7 @@ public:
                 if (!test_info.should_run() || test_info.result()->Passed()) {
                     continue;
                 }
-                internal::ColoredPrintf(internal::COLOR_RED, "[  FAILED  ] ");
+                ColoredPrintf(Color::kRed, "[  FAILED  ] ");
                 printf("%s.%s", test_case.name(), test_info.name());
                 internal::PrintFullTestCommentIfPresent(test_info);
                 printf("\n");
@@ -126,10 +155,10 @@ bool TestB6     = false;
 bool TestNative = true;
 
 inline const std::string& GetMathBackendParameters() {
-    static std::string id = "Backend " + std::to_string(MATHBACKEND) +
+    static std::string id = std::to_string(MATHBACKEND) +
 #ifdef WITH_BE2
-                            (MATHBACKEND == 2 ? " internal int size " + std::to_string(sizeof(integral_dtype) * 8) +
-                                                    " BitLength " + std::to_string(BigIntegerBitLength) :
+                            (MATHBACKEND == 2 ? " (Internal Int Size " + std::to_string(sizeof(integral_dtype) * 8) +
+                                                    ", Bit Length " + std::to_string(BigIntegerBitLength) + ")" :
                                                 "") +
 #endif
                             "";
@@ -195,8 +224,8 @@ int main(int argc, char** argv) {
         listeners.Append(new MinimalistPrinter);
     }
     else {
-        cout << "OpenFHE Version " << GetOPENFHEVersion() << endl;
-        cout << "Default Backend " << GetMathBackendParameters() << endl;
+        cout << "OpenFHE Version: " << GetOPENFHEVersion() << endl;
+        cout << "Default Backend: " << GetMathBackendParameters() << endl;
     }
 
     std::cout << "Testing Backends: " << (TestB2 ? "2 " : "") << (TestB4 ? "4 " : "") << (TestB6 ? "6 " : "")

@@ -36,12 +36,14 @@
 
 #include <iostream>
 #include <vector>
+#include <memory>
+#include <string>
 #include "gtest/gtest.h"
 
 using namespace lbcrypto;
 
 //===========================================================================================================
-enum TEST_CASE_TYPE {
+enum TEST_CASE_TYPE : int {
     ADD_PACKED_UTBGVRNS = 0,
     MULT_PACKED_UTBGVRNS,
     EVALATINDEX_UTBGVRNS,
@@ -291,7 +293,7 @@ protected:
             // std::vector<int64_t> vectorOfIntsSub = { -7,-5,-3,-1,1,3,5,7 };
             std::vector<int64_t> vectorOfIntsSub(VECTOR_SIZE);
             for (usint i = 0; i < VECTOR_SIZE; i++) {
-                vectorOfIntsSub[i] = (int64_t)(2 * i) - VECTOR_SIZE + 1;
+                vectorOfIntsSub[i] = static_cast<int64_t>(2 * i) - VECTOR_SIZE + 1;
             }
             Plaintext plaintextSub = cc->MakePackedPlaintext(vectorOfIntsSub);
 
@@ -889,7 +891,7 @@ protected:
             Plaintext resultCompressed;
             auto algo           = cc->GetScheme();
             size_t targetTowers = (testData.params.scalTech == FLEXIBLEAUTOEXT) ? 2 : 1;
-            auto ctCompressed   = algo->Compress(ct, targetTowers);
+            auto ctCompressed   = cc->Compress(ct, targetTowers);
 
             size_t towersLeft = ctCompressed->GetElements()[0].GetNumOfElements();
             EXPECT_TRUE(towersLeft == targetTowers) << " compress fails";

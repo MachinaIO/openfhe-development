@@ -32,20 +32,20 @@
 #ifndef LBCRYPTO_CRYPTO_BASE_FHE_H
 #define LBCRYPTO_CRYPTO_BASE_FHE_H
 
-#include "key/privatekey-fwd.h"
-#include "key/evalkey-fwd.h"
+#include "binfhecontext.h"
 #include "ciphertext-fwd.h"
 #include "cryptocontext-fwd.h"
+#include "key/evalkey-fwd.h"
+#include "key/keypair.h"
+#include "key/privatekey-fwd.h"
+#include "scheme/scheme-swch-params.h"
 #include "utils/exception.h"
 
-#include "binfhecontext.h"
-#include "key/keypair.h"
-#include "scheme/scheme-swch-params.h"
-
-#include <memory>
-#include <vector>
 #include <map>
+#include <memory>
+#include <tuple>
 #include <utility>
+#include <vector>
 
 /**
  * @namespace lbcrypto
@@ -60,7 +60,7 @@ namespace lbcrypto {
 template <class Element>
 class FHEBase {
 public:
-    virtual ~FHEBase() {}
+    virtual ~FHEBase() = default;
 
     /**
    * Bootstrap functionality:
@@ -96,8 +96,8 @@ public:
    * @param slots - number of slots to be bootstrapped
    * @return the dictionary of evaluation key indices.
    */
-    virtual std::shared_ptr<std::map<usint, EvalKey<Element>>> EvalBootstrapKeyGen(const PrivateKey<Element> privateKey,
-                                                                                   uint32_t slots) {
+    virtual std::shared_ptr<std::map<uint32_t, EvalKey<Element>>> EvalBootstrapKeyGen(
+        const PrivateKey<Element> privateKey, uint32_t slots) {
         OPENFHE_THROW("Not supported");
     }
 
@@ -125,9 +125,105 @@ public:
    * determined by the user experimentally by first running EvalBootstrap with numIterations = 1 and precision = 0 (unused).
    * @return the refreshed ciphertext.
    */
-    virtual Ciphertext<Element> EvalBootstrap(ConstCiphertext<Element> ciphertext, uint32_t numIterations,
+    virtual Ciphertext<Element> EvalBootstrap(ConstCiphertext<Element>& ciphertext, uint32_t numIterations,
                                               uint32_t precision) const {
         OPENFHE_THROW("EvalBootstrap is not implemented for this scheme");
+    }
+
+    virtual void EvalFBTSetup(const CryptoContextImpl<Element>& cc, const std::vector<std::complex<double>>& coeffs,
+                              uint32_t numSlots, const BigInteger& PIn, const BigInteger& POut, const BigInteger& Bigq,
+                              const PublicKey<DCRTPoly>& pubKey, const std::vector<uint32_t>& dim1,
+                              const std::vector<uint32_t>& levelBudget, uint32_t lvlsAfterBoot = 0,
+                              uint32_t depthLeveledComputation = 0, size_t order = 1) {
+        OPENFHE_THROW("Not supported");
+    }
+    virtual void EvalFBTSetup(const CryptoContextImpl<Element>& cc, const std::vector<int64_t>& coeffs,
+                              uint32_t numSlots, const BigInteger& PIn, const BigInteger& POut, const BigInteger& Bigq,
+                              const PublicKey<DCRTPoly>& pubKey, const std::vector<uint32_t>& dim1,
+                              const std::vector<uint32_t>& levelBudget, uint32_t lvlsAfterBoot = 0,
+                              uint32_t depthLeveledComputation = 0, size_t order = 1) {
+        OPENFHE_THROW("Not supported");
+    }
+
+    virtual Ciphertext<Element> EvalFBT(ConstCiphertext<DCRTPoly>& ciphertext,
+                                        const std::vector<std::complex<double>>& coeffs, uint32_t digitBitSize,
+                                        const BigInteger& initialScaling, uint64_t postScaling,
+                                        uint32_t levelToReduce = 0, size_t order = 1) {
+        OPENFHE_THROW("Not supported");
+    }
+    virtual Ciphertext<Element> EvalFBT(ConstCiphertext<DCRTPoly>& ciphertext, const std::vector<int64_t>& coeffs,
+                                        uint32_t digitBitSize, const BigInteger& initialScaling, uint64_t postScaling,
+                                        uint32_t levelToReduce = 0, size_t order = 1) {
+        OPENFHE_THROW("Not supported");
+    }
+
+    virtual Ciphertext<Element> EvalFBTNoDecoding(ConstCiphertext<DCRTPoly>& ciphertext,
+                                                  const std::vector<std::complex<double>>& coeffs,
+                                                  uint32_t digitBitSize, const BigInteger& initialScaling,
+                                                  size_t order = 1) {
+        OPENFHE_THROW("Not supported");
+    }
+    virtual Ciphertext<Element> EvalFBTNoDecoding(ConstCiphertext<DCRTPoly>& ciphertext,
+                                                  const std::vector<int64_t>& coeffs, uint32_t digitBitSize,
+                                                  const BigInteger& initialScaling, size_t order = 1) {
+        OPENFHE_THROW("Not supported");
+    }
+
+    virtual Ciphertext<Element> EvalHomDecoding(ConstCiphertext<DCRTPoly>& ciphertext, uint64_t postScaling,
+                                                uint32_t levelToReduce = 0) {
+        OPENFHE_THROW("Not supported");
+    }
+
+    virtual std::shared_ptr<seriesPowers<DCRTPoly>> EvalMVBPrecompute(ConstCiphertext<DCRTPoly>& ciphertext,
+                                                                      const std::vector<std::complex<double>>& coeffs,
+                                                                      uint32_t digitBitSize,
+                                                                      const BigInteger& initialScaling,
+                                                                      size_t order = 1) {
+        OPENFHE_THROW("Not supported");
+    }
+
+    virtual std::shared_ptr<seriesPowers<DCRTPoly>> EvalMVBPrecompute(ConstCiphertext<DCRTPoly>& ciphertext,
+                                                                      const std::vector<int64_t>& coeffs,
+                                                                      uint32_t digitBitSize,
+                                                                      const BigInteger& initialScaling,
+                                                                      size_t order = 1) {
+        OPENFHE_THROW("Not supported");
+    }
+
+    virtual Ciphertext<Element> EvalMVB(const std::shared_ptr<seriesPowers<DCRTPoly>> ciphertexts,
+                                        const std::vector<std::complex<double>>& coeffs, uint32_t digitBitSize,
+                                        const uint64_t postScaling, uint32_t levelToReduce = 0, size_t order = 1) {
+        OPENFHE_THROW("Not supported");
+    }
+    virtual Ciphertext<Element> EvalMVB(const std::shared_ptr<seriesPowers<DCRTPoly>> ciphertexts,
+                                        const std::vector<int64_t>& coeffs, uint32_t digitBitSize,
+                                        const uint64_t postScaling, uint32_t levelToReduce = 0, size_t order = 1) {
+        OPENFHE_THROW("Not supported");
+    }
+
+    virtual Ciphertext<Element> EvalMVBNoDecoding(const std::shared_ptr<seriesPowers<DCRTPoly>> ciphertexts,
+                                                  const std::vector<std::complex<double>>& coeffs,
+                                                  uint32_t digitBitSize, size_t order = 1) {
+        OPENFHE_THROW("Not supported");
+    }
+    virtual Ciphertext<Element> EvalMVBNoDecoding(const std::shared_ptr<seriesPowers<DCRTPoly>> ciphertexts,
+                                                  const std::vector<int64_t>& coeffs, uint32_t digitBitSize,
+                                                  size_t order = 1) {
+        OPENFHE_THROW("Not supported");
+    }
+
+    virtual Ciphertext<DCRTPoly> EvalHermiteTrigSeries(ConstCiphertext<DCRTPoly>& ciphertext,
+                                                       const std::vector<std::complex<double>>& coefficientsCheb,
+                                                       double a, double b,
+                                                       const std::vector<std::complex<double>>& coefficientsHerm,
+                                                       size_t precomp = 0) {
+        OPENFHE_THROW("Not supported");
+    }
+    virtual Ciphertext<DCRTPoly> EvalHermiteTrigSeries(ConstCiphertext<DCRTPoly>& ciphertext,
+                                                       const std::vector<std::complex<double>>& coefficientsCheb,
+                                                       double a, double b, const std::vector<int64_t>& coefficientsHerm,
+                                                       size_t precomp = 0) {
+        OPENFHE_THROW("Not supported");
     }
 
     /**
@@ -147,8 +243,8 @@ public:
    * @param keypair CKKS key pair
    * @param lwesk FHEW secret key
    */
-    virtual std::shared_ptr<std::map<usint, EvalKey<Element>>> EvalCKKStoFHEWKeyGen(const KeyPair<Element>& keyPair,
-                                                                                    ConstLWEPrivateKey& lwesk) {
+    virtual std::shared_ptr<std::map<uint32_t, EvalKey<Element>>> EvalCKKStoFHEWKeyGen(const KeyPair<Element>& keyPair,
+                                                                                       ConstLWEPrivateKey& lwesk) {
         OPENFHE_THROW("EvalCKKStoFHEWKeyGen is not supported for this scheme");
     }
 
@@ -202,11 +298,9 @@ public:
    * @param dim1 baby-step for the linear transform
    * @param L level on which the hom. decoding matrix should be. We want the hom. decoded ciphertext to be on the last level
    */
-    virtual std::shared_ptr<std::map<usint, EvalKey<Element>>> EvalFHEWtoCKKSKeyGen(const KeyPair<Element>& keyPair,
-                                                                                    ConstLWEPrivateKey& lwesk,
-                                                                                    uint32_t numSlots = 0,
-                                                                                    uint32_t numCtxts = 0,
-                                                                                    uint32_t dim1 = 0, uint32_t L = 0) {
+    virtual std::shared_ptr<std::map<uint32_t, EvalKey<Element>>> EvalFHEWtoCKKSKeyGen(
+        const KeyPair<Element>& keyPair, ConstLWEPrivateKey& lwesk, uint32_t numSlots = 0, uint32_t numCtxts = 0,
+        uint32_t dim1 = 0, uint32_t L = 0) {
         OPENFHE_THROW("EvalFHEWtoCKKSKeyGen is not supported for this scheme");
     }
 
@@ -222,7 +316,7 @@ public:
    */
     virtual void EvalCompareSwitchPrecompute(const CryptoContextImpl<Element>& ccCKKS, uint32_t pLWE, double scaleSign,
                                              bool unit) {
-        OPENFHE_THROW(not_implemented_error, "EvalCompareSwitchPrecompute is not supported for this scheme");
+        OPENFHE_THROW("EvalCompareSwitchPrecompute is not supported for this scheme");
     }
 
     /**
@@ -262,7 +356,7 @@ public:
    * @param keypair CKKS key pair
    * @param lwesk FHEW secret key
    */
-    virtual std::shared_ptr<std::map<usint, EvalKey<Element>>> EvalSchemeSwitchingKeyGen(
+    virtual std::shared_ptr<std::map<uint32_t, EvalKey<Element>>> EvalSchemeSwitchingKeyGen(
         const KeyPair<Element>& keyPair, ConstLWEPrivateKey& lwesk) {
         OPENFHE_THROW("EvalSchemeSwitchingKeyGen is not supported for this scheme");
     }

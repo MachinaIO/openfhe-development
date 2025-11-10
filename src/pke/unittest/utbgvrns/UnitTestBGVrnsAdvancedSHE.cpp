@@ -42,7 +42,7 @@
 using namespace lbcrypto;
 
 //===========================================================================================================
-enum TEST_CASE_TYPE {
+enum TEST_CASE_TYPE : int {
     EVAL_MULT_SINGLE = 0,
     EVAL_ADD_SINGLE,
 };

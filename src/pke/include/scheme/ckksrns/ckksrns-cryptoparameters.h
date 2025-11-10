@@ -32,8 +32,8 @@
 #ifndef LBCRYPTO_CRYPTO_CKKSRNS_CRYPTOPARAMETERS_H
 #define LBCRYPTO_CRYPTO_CKKSRNS_CRYPTOPARAMETERS_H
 
-#include "schemerns/rns-cryptoparameters.h"
 #include "globals.h"
+#include "schemerns/rns-cryptoparameters.h"
 
 #include <memory>
 #include <string>
@@ -46,15 +46,16 @@ namespace lbcrypto {
 
 class CryptoParametersCKKSRNS : public CryptoParametersRNS {
     using ParmType = typename DCRTPoly::Params;
+#define DISABLED_FOR_CKKSRNS_PARAMS OPENFHE_THROW("This parameter is not available for CKKSRNS.");
 
 public:
-    CryptoParametersCKKSRNS() : CryptoParametersRNS() {}
-
-    CryptoParametersCKKSRNS(const CryptoParametersCKKSRNS& rhs) : CryptoParametersRNS(rhs) {}
+    CryptoParametersCKKSRNS()                                       = default;
+    CryptoParametersCKKSRNS(const CryptoParametersCKKSRNS& rhs)     = default;
+    CryptoParametersCKKSRNS(CryptoParametersCKKSRNS&& rhs) noexcept = default;
 
     CryptoParametersCKKSRNS(std::shared_ptr<ParmType> params, const PlaintextModulus& plaintextModulus,
                             float distributionParameter, float assuranceMeasure, SecurityLevel securityLevel,
-                            usint digitSize, SecretKeyDist secretKeyDist, int maxRelinSkDeg = 2,
+                            uint32_t digitSize, SecretKeyDist secretKeyDist, int maxRelinSkDeg = 2,
                             KeySwitchTechnique ksTech = BV, ScalingTechnique scalTech = FIXEDMANUAL,
                             EncryptionTechnique encTech = STANDARD, MultiplicationTechnique multTech = HPS,
                             MultipartyMode multipartyMode                         = FIXED_NOISE_MULTIPARTY,
@@ -68,7 +69,7 @@ public:
 
     CryptoParametersCKKSRNS(std::shared_ptr<ParmType> params, EncodingParams encodingParams,
                             float distributionParameter, float assuranceMeasure, SecurityLevel securityLevel,
-                            usint digitSize, SecretKeyDist secretKeyDist, int maxRelinSkDeg = 2,
+                            uint32_t digitSize, SecretKeyDist secretKeyDist, int maxRelinSkDeg = 2,
                             KeySwitchTechnique ksTech = BV, ScalingTechnique scalTech = FIXEDMANUAL,
                             EncryptionTechnique encTech = STANDARD, MultiplicationTechnique multTech = HPS,
                             ProxyReEncryptionMode PREMode           = NOT_SET,
@@ -77,19 +78,40 @@ public:
                             DecryptionNoiseMode decryptionNoiseMode = FIXED_NOISE_DECRYPT,
                             PlaintextModulus noiseScale = 1, uint32_t statisticalSecurity = 30,
                             uint32_t numAdversarialQueries = 1, uint32_t thresholdNumOfParties = 1,
-                            COMPRESSION_LEVEL mPIntBootCiphertextCompressionLevel = COMPRESSION_LEVEL::SLACK)
+                            COMPRESSION_LEVEL mPIntBootCiphertextCompressionLevel = COMPRESSION_LEVEL::SLACK,
+                            uint32_t compositeDegree = BASE_NUM_LEVELS_TO_DROP, uint32_t registerWordSize = NATIVEINT,
+                            CKKSDataType ckksDataType = REAL)
         : CryptoParametersRNS(params, encodingParams, distributionParameter, assuranceMeasure, securityLevel, digitSize,
                               secretKeyDist, maxRelinSkDeg, ksTech, scalTech, encTech, multTech, PREMode,
                               multipartyMode, executionMode, decryptionNoiseMode, noiseScale, statisticalSecurity,
-                              numAdversarialQueries, thresholdNumOfParties, mPIntBootCiphertextCompressionLevel) {}
+                              numAdversarialQueries, thresholdNumOfParties, mPIntBootCiphertextCompressionLevel,
+                              compositeDegree, registerWordSize, ckksDataType) {}
 
-    virtual ~CryptoParametersCKKSRNS() {}
+    virtual ~CryptoParametersCKKSRNS() = default;
 
     void PrecomputeCRTTables(KeySwitchTechnique ksTech, ScalingTechnique scalTech, EncryptionTechnique encTech,
                              MultiplicationTechnique multTech, uint32_t numPartQ, uint32_t auxBits,
                              uint32_t extraBits) override;
 
     uint64_t FindAuxPrimeStep() const override;
+
+    void ConfigureCompositeDegree(uint32_t scalingModSize);
+
+    // PlaintextModulus GetPlaintextModulus() const override {
+    //     DISABLED_FOR_CKKSRNS_PARAMS;
+    // }
+
+    uint32_t GetEvalAddCount() const override {
+        DISABLED_FOR_CKKSRNS_PARAMS;
+    }
+
+    uint32_t GetKeySwitchCount() const override {
+        DISABLED_FOR_CKKSRNS_PARAMS;
+    }
+
+    uint32_t GetPRENumHops() const override {
+        DISABLED_FOR_CKKSRNS_PARAMS;
+    }
 
     /////////////////////////////////////
     // SERIALIZATION
@@ -118,6 +140,7 @@ public:
     std::string SerializedObjectName() const override {
         return "CryptoParametersCKKSRNS";
     }
+
     static uint32_t SerializedVersion() {
         return 1;
     }

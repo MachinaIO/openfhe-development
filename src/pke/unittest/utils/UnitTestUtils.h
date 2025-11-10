@@ -43,6 +43,7 @@
 #include <algorithm>
 #include <csignal>
 #include <complex>
+#include <iostream>
 
 // some functions are inlined in this files to avoid link errors
 //===========================================================================================================
@@ -71,6 +72,19 @@ constexpr double EPSILON_HIGH = 0.0001;
 template <typename T>
 bool checkEquality(const T& a, const T& b, const double eps = EPSILON) {
     return (abs(a - b) <= eps);
+}
+
+/**
+ * Function to check equality of 2 scalars
+ *
+ * @param a      first value to compare
+ * @param b      second value to compare
+ * @param errMsg Debug message to display upon failure
+ * @param eps    minimum precision to consider a and b equal. Default is EPSILON
+ */
+template <typename T>
+void checkEquality(const T& a, const T& b, const double eps, const std::string& errMsg) {
+    EXPECT_TRUE(checkEquality(a, b, eps)) << errMsg;
 }
 
 /**

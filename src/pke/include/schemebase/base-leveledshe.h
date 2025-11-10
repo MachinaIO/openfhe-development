@@ -32,20 +32,20 @@
 #ifndef LBCRYPTO_CRYPTO_BASE_LEVELEDSHE_H
 #define LBCRYPTO_CRYPTO_BASE_LEVELEDSHE_H
 
-#include "lattice/lat-hal.h"
-#include "key/publickey-fwd.h"
-#include "key/privatekey-fwd.h"
-#include "key/evalkey-fwd.h"
-#include "encoding/plaintext-fwd.h"
 #include "ciphertext-fwd.h"
+#include "encoding/plaintext-fwd.h"
+#include "key/evalkey-fwd.h"
+#include "key/privatekey-fwd.h"
+#include "key/publickey-fwd.h"
+#include "lattice/lat-hal.h"
 #include "utils/caller_info.h"
-#include "utils/inttypes.h"
 #include "utils/exception.h"
+#include "utils/inttypes.h"
 
-#include <memory>
-#include <vector>
 #include <map>
+#include <memory>
 #include <string>
+#include <vector>
 
 /**
  * @namespace lbcrypto
@@ -65,7 +65,7 @@ class LeveledSHEBase {
     using TugType  = typename Element::TugType;
 
 public:
-    virtual ~LeveledSHEBase() {}
+    virtual ~LeveledSHEBase() = default;
 
     /////////////////////////////////////////
     // SHE NEGATION
@@ -78,7 +78,7 @@ public:
    * @param &ciphertext the input ciphertext.
    * @return new ciphertext.
    */
-    virtual Ciphertext<Element> EvalNegate(ConstCiphertext<Element> ciphertext) const;
+    virtual Ciphertext<Element> EvalNegate(ConstCiphertext<Element>& ciphertext) const;
 
     /**
    * Virtual function to define the interface for homomorphic negation of
@@ -101,8 +101,8 @@ public:
    * @param ciphertext2 the input ciphertext.
    * @return the new ciphertext.
    */
-    virtual Ciphertext<Element> EvalAdd(ConstCiphertext<Element> ciphertext1,
-                                        ConstCiphertext<Element> ciphertext2) const;
+    virtual Ciphertext<Element> EvalAdd(ConstCiphertext<Element>& ciphertext1,
+                                        ConstCiphertext<Element>& ciphertext2) const;
 
     /**
    * Virtual function to define the interface for in-place homomorphic addition
@@ -111,7 +111,7 @@ public:
    * @param ciphertext1 the input/output ciphertext.
    * @param ciphertext2 the input ciphertext.
    */
-    virtual void EvalAddInPlace(Ciphertext<Element>& ciphertext1, ConstCiphertext<Element> ciphertext2) const;
+    virtual void EvalAddInPlace(Ciphertext<Element>& ciphertext1, ConstCiphertext<Element>& ciphertext2) const;
 
     /**
    * Virtual function to define the interface for homomorphic addition of
@@ -139,7 +139,7 @@ public:
    * @param plaintext the input plaintext.
    * @return the new ciphertext.
    */
-    virtual Ciphertext<Element> EvalAdd(ConstCiphertext<Element> ciphertext, ConstPlaintext plaintext) const;
+    virtual Ciphertext<Element> EvalAdd(ConstCiphertext<Element>& ciphertext, ConstPlaintext& plaintext) const;
 
     /**
    * Virtual function to define the interface for homomorphic addition of
@@ -148,7 +148,7 @@ public:
    * @param ciphertext the input ciphertext.
    * @param plaintext the input plaintext.
    */
-    virtual void EvalAddInPlace(Ciphertext<Element>& ciphertext, ConstPlaintext plaintext) const;
+    virtual void EvalAddInPlace(Ciphertext<Element>& ciphertext, ConstPlaintext& plaintext) const;
 
     /**
    * Virtual function to define the interface for homomorphic addition of
@@ -159,7 +159,7 @@ public:
    * @param plaintext the input plaintext.
    * @return the new ciphertext.
    */
-    virtual Ciphertext<Element> EvalAddMutable(Ciphertext<Element>& ciphertext, Plaintext plaintext) const {
+    virtual Ciphertext<Element> EvalAddMutable(Ciphertext<Element>& ciphertext, Plaintext& plaintext) const {
         OPENFHE_THROW("EvalAddMutable is not implemented for this scheme");
     }
 
@@ -172,24 +172,32 @@ public:
    * @param plaintext the input plaintext.
    * @return the new ciphertext.
    */
-    virtual void EvalAddMutableInPlace(Ciphertext<Element>& ciphertext, Plaintext plaintext) const {
+    virtual void EvalAddMutableInPlace(Ciphertext<Element>& ciphertext, Plaintext& plaintext) const {
         OPENFHE_THROW("EvalAddMutable is not implemented for this scheme");
     }
 
-    virtual Ciphertext<Element> EvalAdd(ConstCiphertext<Element> ciphertext, const NativeInteger& constant) const {
+    virtual Ciphertext<Element> EvalAdd(ConstCiphertext<Element>& ciphertext, NativeInteger scalar) const {
         OPENFHE_THROW("integer scalar addition is not implemented for this scheme");
     }
 
-    virtual void EvalAddInPlace(Ciphertext<Element>& ciphertext, const NativeInteger& constant) const {
+    virtual void EvalAddInPlace(Ciphertext<Element>& ciphertext, NativeInteger scalar) const {
         OPENFHE_THROW("integer scalar addition is not implemented for this scheme");
     }
 
-    virtual Ciphertext<Element> EvalAdd(ConstCiphertext<Element> ciphertext, double constant) const {
+    virtual Ciphertext<Element> EvalAdd(ConstCiphertext<Element>& ciphertext, double scalar) const {
         OPENFHE_THROW("double scalar addition is not implemented for this scheme");
     }
 
-    virtual void EvalAddInPlace(Ciphertext<Element>& ciphertext, double constant) const {
+    virtual void EvalAddInPlace(Ciphertext<Element>& ciphertext, double scalar) const {
         OPENFHE_THROW("double scalar addition is not implemented for this scheme");
+    }
+
+    virtual Ciphertext<Element> EvalAdd(ConstCiphertext<Element>& ciphertext, std::complex<double> scalar) const {
+        OPENFHE_THROW("complex scalar addition is not implemented for this scheme");
+    }
+
+    virtual void EvalAddInPlace(Ciphertext<Element>& ciphertext, std::complex<double> scalar) const {
+        OPENFHE_THROW("complex scalar addition is not implemented for this scheme");
     }
 
     /////////////////////////////////////////
@@ -204,8 +212,8 @@ public:
    * @param ciphertext2 the input ciphertext.
    * @return the new ciphertext.
    */
-    virtual Ciphertext<Element> EvalSub(ConstCiphertext<Element> ciphertext1,
-                                        ConstCiphertext<Element> ciphertext2) const;
+    virtual Ciphertext<Element> EvalSub(ConstCiphertext<Element>& ciphertext1,
+                                        ConstCiphertext<Element>& ciphertext2) const;
 
     /**
    * Virtual function to define the interface for homomorphic subtraction of
@@ -214,7 +222,7 @@ public:
    * @param ciphertext1 the input ciphertext.
    * @param ciphertext2 the input ciphertext.
    */
-    virtual void EvalSubInPlace(Ciphertext<Element>& ciphertext1, ConstCiphertext<Element> ciphertext2) const;
+    virtual void EvalSubInPlace(Ciphertext<Element>& ciphertext1, ConstCiphertext<Element>& ciphertext2) const;
 
     /**
    * Virtual function to define the interface for homomorphic subtraction of
@@ -251,9 +259,9 @@ public:
    * @param plaintext the input plaintext.
    * @return the new ciphertext.
    */
-    virtual Ciphertext<Element> EvalSub(ConstCiphertext<Element> ciphertext, ConstPlaintext plaintext) const;
+    virtual Ciphertext<Element> EvalSub(ConstCiphertext<Element>& ciphertext, ConstPlaintext& plaintext) const;
 
-    virtual void EvalSubInPlace(Ciphertext<Element>& ciphertext, ConstPlaintext plaintext) const;
+    virtual void EvalSubInPlace(Ciphertext<Element>& ciphertext, ConstPlaintext& plaintext) const;
 
     /**
    * Virtual function to define the interface for homomorphic subtraction of
@@ -264,27 +272,27 @@ public:
    * @param plaintext the input plaintext.
    * @return the new ciphertext.
    */
-    virtual Ciphertext<Element> EvalSubMutable(Ciphertext<Element>& ciphertext, Plaintext plaintext) const {
+    virtual Ciphertext<Element> EvalSubMutable(Ciphertext<Element>& ciphertext, Plaintext& plaintext) const {
         OPENFHE_THROW("EvalSubMutable is not implemented for this scheme");
     }
 
-    virtual void EvalSubMutableInPlace(Ciphertext<Element>& ciphertext, Plaintext plaintext) const {
+    virtual void EvalSubMutableInPlace(Ciphertext<Element>& ciphertext, Plaintext& plaintext) const {
         OPENFHE_THROW("EvalSubMutable is not implemented for this scheme");
     }
 
-    virtual Ciphertext<Element> EvalSub(ConstCiphertext<Element> ciphertext, const NativeInteger& constant) const {
+    virtual Ciphertext<Element> EvalSub(ConstCiphertext<Element>& ciphertext, NativeInteger scalar) const {
         OPENFHE_THROW("integer scalar subtraction is not implemented for this scheme");
     }
 
-    virtual void EvalSubInPlace(Ciphertext<Element>& ciphertext, const NativeInteger& constant) const {
+    virtual void EvalSubInPlace(Ciphertext<Element>& ciphertext, NativeInteger scalar) const {
         OPENFHE_THROW("integer scalar subtraction is not implemented for this scheme");
     }
 
-    virtual Ciphertext<Element> EvalSub(ConstCiphertext<Element> ciphertext, double constant) const {
+    virtual Ciphertext<Element> EvalSub(ConstCiphertext<Element>& ciphertext, double scalar) const {
         OPENFHE_THROW("double scalar subtraction is not implemented for this scheme");
     }
 
-    virtual void EvalSubInPlace(Ciphertext<Element>& ciphertext, double constant) const {
+    virtual void EvalSubInPlace(Ciphertext<Element>& ciphertext, double scalar) const {
         OPENFHE_THROW("double scalar subtraction is not implemented for this scheme");
     }
 
@@ -325,8 +333,8 @@ public:
    * @param ciphertext2 the input ciphertext.
    * @return the new ciphertext.
    */
-    virtual Ciphertext<Element> EvalMult(ConstCiphertext<Element> ciphertext1,
-                                         ConstCiphertext<Element> ciphertext2) const {
+    virtual Ciphertext<Element> EvalMult(ConstCiphertext<Element>& ciphertext1,
+                                         ConstCiphertext<Element>& ciphertext2) const {
         OPENFHE_THROW("EvalMult is not implemented for this scheme");
     }
 
@@ -352,7 +360,7 @@ public:
    * @param ciphertext2 the input ciphertext.
    * @return the new ciphertext.
    */
-    virtual Ciphertext<Element> EvalSquare(ConstCiphertext<Element> ciphertext1) const {
+    virtual Ciphertext<Element> EvalSquare(ConstCiphertext<Element>& ciphertext1) const {
         OPENFHE_THROW("EvalSquare is not implemented for this scheme");
     }
 
@@ -381,9 +389,9 @@ public:
    * @param plaintext the input plaintext.
    * @return the new ciphertext.
    */
-    virtual Ciphertext<Element> EvalMult(ConstCiphertext<Element> ciphertext, ConstPlaintext plaintext) const;
+    virtual Ciphertext<Element> EvalMult(ConstCiphertext<Element>& ciphertext, ConstPlaintext& plaintext) const;
 
-    virtual void EvalMultInPlace(Ciphertext<Element>& ciphertext, ConstPlaintext plaintext) const;
+    virtual void EvalMultInPlace(Ciphertext<Element>& ciphertext, ConstPlaintext& plaintext) const;
 
     /**
    * Virtual function to define the interface for multiplication of ciphertext
@@ -394,7 +402,7 @@ public:
    * @param plaintext the input plaintext.
    * @return the new ciphertext.
    */
-    virtual Ciphertext<Element> EvalMultMutable(Ciphertext<Element>& ciphertext, Plaintext plaintext) const {
+    virtual Ciphertext<Element> EvalMultMutable(Ciphertext<Element>& ciphertext, Plaintext& plaintext) const {
         OPENFHE_THROW("EvalMultMutable C,P is not implemented for this scheme");
     }
 
@@ -407,39 +415,47 @@ public:
    * @param plaintext the input plaintext.
    * @return the new ciphertext.
    */
-    virtual void EvalMultMutableInPlace(Ciphertext<Element>& ciphertext, Plaintext plaintext) const {
+    virtual void EvalMultMutableInPlace(Ciphertext<Element>& ciphertext, Plaintext& plaintext) const {
         OPENFHE_THROW("EvalMultMutableInPlace C P is not implemented for this scheme");
     }
 
-    virtual Ciphertext<Element> MultByMonomial(ConstCiphertext<Element> ciphertext, usint power) const {
+    virtual Ciphertext<Element> MultByMonomial(ConstCiphertext<Element>& ciphertext, uint32_t power) const {
         OPENFHE_THROW("MultByMonomial is not implemented for this scheme");
     }
 
-    virtual void MultByMonomialInPlace(Ciphertext<Element>& ciphertext, usint power) const {
+    virtual void MultByMonomialInPlace(Ciphertext<Element>& ciphertext, uint32_t power) const {
         OPENFHE_THROW("MultByMonomialInPlace is not implemented for this scheme");
     }
 
-    virtual Ciphertext<Element> EvalMult(ConstCiphertext<Element> ciphertext, const NativeInteger& constant) const {
+    virtual Ciphertext<Element> EvalMult(ConstCiphertext<Element>& ciphertext, NativeInteger scalar) const {
         OPENFHE_THROW("integer scalar multiplication is not implemented for this scheme");
     }
 
-    virtual void EvalMultInPlace(Ciphertext<Element>& ciphertext, const NativeInteger& constant) const {
+    virtual void EvalMultInPlace(Ciphertext<Element>& ciphertext, NativeInteger scalar) const {
         OPENFHE_THROW("integer scalar multiplication is not implemented for this scheme");
     }
 
-    virtual Ciphertext<Element> EvalMult(ConstCiphertext<Element> ciphertext, double constant) const {
+    virtual Ciphertext<Element> EvalMult(ConstCiphertext<Element>& ciphertext, double scalar) const {
         OPENFHE_THROW("double scalar multiplication is not implemented for this scheme");
     }
 
-    virtual void EvalMultInPlace(Ciphertext<Element>& ciphertext, double constant) const {
+    virtual void EvalMultInPlace(Ciphertext<Element>& ciphertext, double scalar) const {
         OPENFHE_THROW("double scalar multiplication is not implemented for this scheme");
     }
 
-    virtual Ciphertext<DCRTPoly> MultByInteger(ConstCiphertext<DCRTPoly> ciphertext, uint64_t integer) const {
+    virtual Ciphertext<Element> EvalMult(ConstCiphertext<Element>& ciphertext, std::complex<double> scalar) const {
+        OPENFHE_THROW("complex scalar multiplication is not implemented for this scheme");
+    }
+
+    virtual void EvalMultInPlace(Ciphertext<Element>& ciphertext, std::complex<double> scalar) const {
+        OPENFHE_THROW("complex scalar multiplication is not implemented for this scheme");
+    }
+
+    virtual Ciphertext<Element> MultByInteger(ConstCiphertext<Element>& ciphertext, uint64_t integer) const {
         OPENFHE_THROW("MultByInteger is not implemented for this scheme");
     }
 
-    virtual void MultByIntegerInPlace(Ciphertext<DCRTPoly>& ciphertext, uint64_t integer) const {
+    virtual void MultByIntegerInPlace(Ciphertext<Element>& ciphertext, uint64_t integer) const {
         OPENFHE_THROW("MultByIntegerInPlace is not implemented for this scheme");
     }
 
@@ -453,10 +469,10 @@ public:
    * the same secret key as that of ciphertext1 and ciphertext2.
    * @return the new ciphertext.
    */
-    virtual Ciphertext<Element> EvalMult(ConstCiphertext<Element> ciphertext1, ConstCiphertext<Element> ciphertext2,
+    virtual Ciphertext<Element> EvalMult(ConstCiphertext<Element>& ciphertext1, ConstCiphertext<Element>& ciphertext2,
                                          const EvalKey<Element> evalKey) const;
 
-    virtual void EvalMultInPlace(Ciphertext<Element>& ciphertext1, ConstCiphertext<Element> ciphertext2,
+    virtual void EvalMultInPlace(Ciphertext<Element>& ciphertext1, ConstCiphertext<Element>& ciphertext2,
                                  const EvalKey<Element> evalKey) const;
 
     /**
@@ -489,7 +505,7 @@ public:
     virtual void EvalMultMutableInPlace(Ciphertext<Element>& ciphertext1, Ciphertext<Element>& ciphertext2,
                                         const EvalKey<Element> evalKey) const;
 
-    virtual Ciphertext<Element> EvalSquare(ConstCiphertext<Element> ciphertext, const EvalKey<Element> evalKey) const;
+    virtual Ciphertext<Element> EvalSquare(ConstCiphertext<Element>& ciphertext, const EvalKey<Element> evalKey) const;
 
     virtual void EvalSquareInPlace(Ciphertext<Element>& ciphertext1, const EvalKey<Element> evalKey) const;
 
@@ -506,8 +522,8 @@ public:
    * ciphertext2.
    * @param *newCiphertext the new resulting ciphertext.
    */
-    virtual Ciphertext<Element> EvalMultAndRelinearize(ConstCiphertext<Element> ciphertext1,
-                                                       ConstCiphertext<Element> ciphertext2,
+    virtual Ciphertext<Element> EvalMultAndRelinearize(ConstCiphertext<Element>& ciphertext1,
+                                                       ConstCiphertext<Element>& ciphertext2,
                                                        const std::vector<EvalKey<Element>>& evalKeyVec) const;
 
     /**
@@ -519,7 +535,7 @@ public:
    * ciphertext2.
    * @return the new resulting ciphertext.
    */
-    virtual Ciphertext<Element> Relinearize(ConstCiphertext<Element> ciphertext,
+    virtual Ciphertext<Element> Relinearize(ConstCiphertext<Element>& ciphertext,
                                             const std::vector<EvalKey<Element>>& evalKeyVec) const;
 
     /**
@@ -546,8 +562,8 @@ public:
    * @param indexList list of automorphism indices to be computed
    * @return returns the evaluation keys
    */
-    virtual std::shared_ptr<std::map<usint, EvalKey<Element>>> EvalAutomorphismKeyGen(
-        const PrivateKey<Element> privateKey, const std::vector<usint>& indexList) const;
+    virtual std::shared_ptr<std::map<uint32_t, EvalKey<Element>>> EvalAutomorphismKeyGen(
+        const PrivateKey<Element> privateKey, const std::vector<uint32_t>& indexList) const;
 
     /**
    * Virtual function to generate all isomorphism keys for a given private key
@@ -557,9 +573,9 @@ public:
    * @param indexList list of automorphism indices to be computed
    * @return returns the evaluation keys
    */
-    virtual std::shared_ptr<std::map<usint, EvalKey<Element>>> EvalAutomorphismKeyGen(
+    virtual std::shared_ptr<std::map<uint32_t, EvalKey<Element>>> EvalAutomorphismKeyGen(
         const PublicKey<Element> publicKey, const PrivateKey<Element> privateKey,
-        const std::vector<usint>& indexList) const {
+        const std::vector<uint32_t>& indexList) const {
         std::string errMsg = "EvalAutomorphismKeyGen is not implemented for this scheme.";
         OPENFHE_THROW(errMsg);
     }
@@ -572,8 +588,8 @@ public:
    * @param &evalKeys - reference to the vector of evaluation keys generated by EvalAutomorphismKeyGen.
    * @return resulting ciphertext
    */
-    virtual Ciphertext<Element> EvalAutomorphism(ConstCiphertext<Element> ciphertext, usint i,
-                                                 const std::map<usint, EvalKey<Element>>& evalKeyMap,
+    virtual Ciphertext<Element> EvalAutomorphism(ConstCiphertext<Element>& ciphertext, uint32_t i,
+                                                 const std::map<uint32_t, EvalKey<Element>>& evalKeyMap,
                                                  CALLER_INFO_ARGS_HDR) const;
 
     /**
@@ -587,7 +603,8 @@ public:
    * @param digits the digit decomposition created by
    * EvalFastRotationPrecompute at the precomputation step.
    */
-    virtual Ciphertext<Element> EvalFastRotation(ConstCiphertext<Element> ciphertext, const usint index, const usint m,
+    virtual Ciphertext<Element> EvalFastRotation(ConstCiphertext<Element>& ciphertext, const uint32_t index,
+                                                 const uint32_t m,
                                                  const std::shared_ptr<std::vector<Element>> digits) const;
 
     /**
@@ -597,14 +614,14 @@ public:
    * @param ct the input ciphertext on which to do the precomputation (digit
    * decomposition)
    */
-    virtual std::shared_ptr<std::vector<Element>> EvalFastRotationPrecompute(ConstCiphertext<Element> ciphertext) const;
+    virtual std::shared_ptr<std::vector<Element>> EvalFastRotationPrecompute(
+        ConstCiphertext<Element>& ciphertext) const;
 
-    virtual Ciphertext<Element> EvalFastRotationExt(ConstCiphertext<Element> ciphertext, usint index,
+    virtual Ciphertext<Element> EvalFastRotationExt(ConstCiphertext<Element>& ciphertext, uint32_t index,
                                                     const std::shared_ptr<std::vector<Element>> expandedCiphertext,
                                                     bool addFirst,
-                                                    const std::map<usint, EvalKey<Element>>& evalKeys) const {
-        std::string errMsg = "EvalFastRotationExt is not implemented for this scheme.";
-        OPENFHE_THROW(errMsg);
+                                                    const std::map<uint32_t, EvalKey<Element>>& evalKeys) const {
+        OPENFHE_THROW("EvalFastRotationExt is not implemented for this scheme.");
     }
 
     /**
@@ -616,7 +633,7 @@ public:
    * @param indexList list of indices to be computed
    * @return returns the evaluation keys
    */
-    virtual std::shared_ptr<std::map<usint, EvalKey<Element>>> EvalAtIndexKeyGen(
+    virtual std::shared_ptr<std::map<uint32_t, EvalKey<Element>>> EvalAtIndexKeyGen(
         const PublicKey<Element> publicKey, const PrivateKey<Element> privateKey,
         const std::vector<int32_t>& indexList) const;
 
@@ -629,10 +646,10 @@ public:
    * generated by EvalAtIndexKeyGen.
    * @return resulting ciphertext
    */
-    virtual Ciphertext<Element> EvalAtIndex(ConstCiphertext<Element> ciphertext, int32_t index,
-                                            const std::map<usint, EvalKey<Element>>& evalKeyMap) const;
+    virtual Ciphertext<Element> EvalAtIndex(ConstCiphertext<Element>& ciphertext, int32_t index,
+                                            const std::map<uint32_t, EvalKey<Element>>& evalKeyMap) const;
 
-    virtual usint FindAutomorphismIndex(usint index, usint m) const {
+    virtual uint32_t FindAutomorphismIndex(uint32_t index, uint32_t m) const {
         OPENFHE_THROW("FindAutomorphismIndex is not supported for this scheme");
     }
 
@@ -646,7 +663,7 @@ public:
    * @param &cipherText Ciphertext to perform mod reduce on.
    * @param levels the number of towers to drop.
    */
-    virtual Ciphertext<Element> ModReduce(ConstCiphertext<Element> ciphertext, size_t levels) const {
+    virtual Ciphertext<Element> ModReduce(ConstCiphertext<Element>& ciphertext, size_t levels) const {
         OPENFHE_THROW("ModReduce is not supported for this scheme");
     }
 
@@ -672,8 +689,8 @@ public:
    * @param &cipherTextResult is the resulting ciphertext that can be
    * decrypted with the secret key of the particular level.
    */
-    virtual Ciphertext<Element> ComposedEvalMult(ConstCiphertext<Element> ciphertext1,
-                                                 ConstCiphertext<Element> ciphertext2,
+    virtual Ciphertext<Element> ComposedEvalMult(ConstCiphertext<Element>& ciphertext1,
+                                                 ConstCiphertext<Element>& ciphertext2,
                                                  const EvalKey<Element> evalKey) const;
 
     /**
@@ -686,7 +703,7 @@ public:
    * key switch operation.
    * @param &cipherTextResult is the resulting ciphertext.
    */
-    virtual Ciphertext<Element> LevelReduce(ConstCiphertext<Element> ciphertext1, const EvalKey<Element> evalKey,
+    virtual Ciphertext<Element> LevelReduce(ConstCiphertext<Element>& ciphertext1, const EvalKey<Element> evalKey,
                                             size_t levels) const;
 
     /**
@@ -704,7 +721,8 @@ public:
         OPENFHE_THROW("LevelReduceInPlace is not supported for this scheme");
     }
 
-    virtual Ciphertext<Element> Compress(ConstCiphertext<Element> ciphertext, size_t towersLeft) const {
+    virtual Ciphertext<Element> Compress(ConstCiphertext<Element>& ciphertext, size_t towersLeft,
+                                         size_t noiseScaleDeg) const {
         OPENFHE_THROW("Compress is not supported for this scheme");
     }
 
@@ -715,7 +733,7 @@ public:
    * @param levels the number of towers to drop.
    * @return ciphertext after the modulus reduction performed.
    */
-    virtual Ciphertext<Element> ModReduceInternal(ConstCiphertext<Element> ciphertext, size_t levels) const {
+    virtual Ciphertext<Element> ModReduceInternal(ConstCiphertext<Element>& ciphertext, size_t levels) const {
         OPENFHE_THROW("ModReduce is not supported for this scheme");
     }
 
@@ -739,7 +757,7 @@ public:
    * @param levels the number of towers to drop.
    * @return resulting ciphertext.
    */
-    virtual Ciphertext<Element> LevelReduceInternal(ConstCiphertext<Element> ciphertext, size_t levels) const {
+    virtual Ciphertext<Element> LevelReduceInternal(ConstCiphertext<Element>& ciphertext, size_t levels) const {
         OPENFHE_THROW("LevelReduce is not supported for this scheme");
     }
 
@@ -777,16 +795,15 @@ public:
         OPENFHE_THROW("Mutable Operations are not supported for this scheme");
     }
 
-    virtual Ciphertext<Element> MorphPlaintext(ConstPlaintext plaintext, ConstCiphertext<Element> ciphertext) const;
+    virtual Ciphertext<Element> MorphPlaintext(ConstPlaintext& plaintext, ConstCiphertext<Element>& ciphertext) const;
 
 protected:
     /////////////////////////////////////////
     // CORE OPERATIONS
     /////////////////////////////////////////
-    void VerifyNumOfTowers(const ConstCiphertext<Element>& ciphertext1, const ConstCiphertext<Element>& ciphertext,
+    void VerifyNumOfTowers(ConstCiphertext<Element>& ciphertext1, ConstCiphertext<Element>& ciphertext,
                            CALLER_INFO_ARGS_HDR) const;
-    void VerifyNumOfTowers(const ConstCiphertext<Element>& ciphertext, const Element& plaintext,
-                           CALLER_INFO_ARGS_HDR) const;
+    void VerifyNumOfTowers(ConstCiphertext<Element>& ciphertext, const Element& plaintext, CALLER_INFO_ARGS_HDR) const;
 
     /**
    * Internal function for in-place homomorphic addition of ciphertexts.
@@ -798,8 +815,8 @@ protected:
    * @return \p ciphertext1 contains the result of the homomorphic addition of
    * input ciphertexts.
    */
-    virtual Ciphertext<Element> EvalAddCore(ConstCiphertext<Element> ciphertext1,
-                                            ConstCiphertext<Element> ciphertext2) const;
+    virtual Ciphertext<Element> EvalAddCore(ConstCiphertext<Element>& ciphertext1,
+                                            ConstCiphertext<Element>& ciphertext2) const;
 
     /**
    * Internal function for in-place homomorphic addition of ciphertexts.
@@ -811,10 +828,10 @@ protected:
    * @return \p ciphertext1 contains the result of the homomorphic addition of
    * input ciphertexts.
    */
-    void EvalAddCoreInPlace(Ciphertext<Element>& ciphertext1, ConstCiphertext<Element> ciphertext2) const;
+    void EvalAddCoreInPlace(Ciphertext<Element>& ciphertext1, ConstCiphertext<Element>& ciphertext2) const;
 
-    virtual Ciphertext<Element> EvalSubCore(ConstCiphertext<Element> ciphertext1,
-                                            ConstCiphertext<Element> ciphertext2) const;
+    virtual Ciphertext<Element> EvalSubCore(ConstCiphertext<Element>& ciphertext1,
+                                            ConstCiphertext<Element>& ciphertext2) const;
 
     /**
    * Internal function for in-place homomorphic addition of ciphertexts.
@@ -826,7 +843,7 @@ protected:
    * @return \p ciphertext1 contains the result of the homomorphic addition of
    * input ciphertexts.
    */
-    void EvalSubCoreInPlace(Ciphertext<Element>& ciphertext1, ConstCiphertext<Element> ciphertext2) const;
+    void EvalSubCoreInPlace(Ciphertext<Element>& ciphertext1, ConstCiphertext<Element>& ciphertext2) const;
 
     /**
    * Internal function for homomorphic multiplication of ciphertexts.
@@ -837,21 +854,18 @@ protected:
    * @param ciphertext2 second input ciphertext.
    * @return result of homomorphic multiplication of input ciphertexts.
    */
-    Ciphertext<Element> EvalMultCore(ConstCiphertext<Element> ciphertext1, ConstCiphertext<Element> ciphertext2) const;
+    Ciphertext<Element> EvalMultCore(ConstCiphertext<Element>& ciphertext1,
+                                     ConstCiphertext<Element>& ciphertext2) const;
+    Ciphertext<Element> EvalMultCore(ConstCiphertext<Element>& ciphertext, const Element& plaintext) const;
+    void EvalMultCoreInPlace(Ciphertext<Element>& ciphertext, const Element& plaintext) const;
 
-    Ciphertext<Element> EvalSquareCore(ConstCiphertext<Element> ciphertext) const;
-
-    virtual Ciphertext<Element> EvalAddCore(ConstCiphertext<Element> ciphertext, const Element& plaintext) const;
-
+    virtual Ciphertext<Element> EvalAddCore(ConstCiphertext<Element>& ciphertext, const Element& plaintext) const;
     void EvalAddCoreInPlace(Ciphertext<Element>& ciphertext, const Element& plaintext) const;
 
-    virtual Ciphertext<Element> EvalSubCore(ConstCiphertext<Element> ciphertext1, const Element& plaintext) const;
-
+    virtual Ciphertext<Element> EvalSubCore(ConstCiphertext<Element>& ciphertext1, const Element& plaintext) const;
     void EvalSubCoreInPlace(Ciphertext<Element>& ciphertext1, const Element& plaintext) const;
 
-    Ciphertext<Element> EvalMultCore(ConstCiphertext<Element> ciphertext, const Element& plaintext) const;
-
-    void EvalMultCoreInPlace(Ciphertext<Element>& ciphertext, const Element& plaintext) const;
+    Ciphertext<Element> EvalSquareCore(ConstCiphertext<Element>& ciphertext) const;
 };
 
 }  // namespace lbcrypto

@@ -176,6 +176,12 @@ double myZZ::ConvertToDouble() const {
     return (conv<double>(*this));
 }
 
+long double myZZ::ConvertToLongDouble() const {
+    // TODO: fix this
+    // return (conv<long double>(*this));
+    return (conv<double>(*this));
+}
+
 // Splits the binary string to equi sized chunks and then populates the internal
 // array values.
 myZZ myZZ::FromBinaryString(const std::string& vin) {

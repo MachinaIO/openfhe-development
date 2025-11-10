@@ -28,36 +28,33 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //==================================================================================
-#include "schemebase/base-pke.h"
 
+#include "cryptocontext.h"
 #include "key/keypair.h"
 #include "key/privatekey.h"
 #include "key/publickey.h"
+#include "schemebase/base-pke.h"
 #include "schemebase/rlwe-cryptoparameters.h"
-#include "cryptocontext.h"
+
+#include <memory>
+#include <utility>
+#include <vector>
 
 namespace lbcrypto {
 
 // makeSparse is not used by this scheme
 template <class Element>
 KeyPair<Element> PKEBase<Element>::KeyGenInternal(CryptoContext<Element> cc, bool makeSparse) const {
-    KeyPair<Element> keyPair(std::make_shared<PublicKeyImpl<Element>>(cc),
-                             std::make_shared<PrivateKeyImpl<Element>>(cc));
-
-    const auto cryptoParams = std::dynamic_pointer_cast<CryptoParametersRLWE<Element>>(cc->GetCryptoParameters());
-
-    const std::shared_ptr<ParmType> elementParams = cryptoParams->GetElementParams();
-    const std::shared_ptr<ParmType> paramsPK      = cryptoParams->GetParamsPK();
-    if (!paramsPK) {
+    const auto cryptoParams  = std::dynamic_pointer_cast<CryptoParametersRLWE<Element>>(cc->GetCryptoParameters());
+    const auto elementParams = cryptoParams->GetElementParams();
+    const auto paramsPK      = cryptoParams->GetParamsPK();
+    if (!paramsPK)
         OPENFHE_THROW("PrecomputeCRTTables() must be called before using precomputed params.");
-    }
-
-    const auto ns      = cryptoParams->GetNoiseScale();
-    const DggType& dgg = cryptoParams->GetDiscreteGaussianGenerator();
-    DugType dug;
-    TugType tug;
 
     // Private Key Generation
+
+    const DggType& dgg = cryptoParams->GetDiscreteGaussianGenerator();
+    TugType tug;
 
     Element s;
     switch (cryptoParams->GetSecretKeyDist()) {
@@ -68,55 +65,58 @@ KeyPair<Element> PKEBase<Element>::KeyGenInternal(CryptoContext<Element> cc, boo
             s = Element(tug, paramsPK, Format::EVALUATION);
             break;
         case SPARSE_TERNARY:
+        case SPARSE_ENCAPSULATED:
             // https://github.com/openfheorg/openfhe-development/issues/311
             s = Element(tug, paramsPK, Format::EVALUATION, 192);
             break;
         default:
-            break;
+            OPENFHE_THROW("Unknown SecretKeyDist.");
     }
 
     // Public Key Generation
 
+    DugType dug;
     Element a(dug, paramsPK, Format::EVALUATION);
+
     Element e(dgg, paramsPK, Format::EVALUATION);
-    Element b(ns * e - a * s);
+    NativeInteger ns = cryptoParams->GetNoiseScale();
 
-    usint sizeQ  = elementParams->GetParams().size();
-    usint sizePK = paramsPK->GetParams().size();
-    if (sizePK > sizeQ) {
+    // b = ns * e - a * s
+    Element b(std::move((e *= ns) -= (a * s)));
+
+    auto sizeQ  = elementParams->GetParams().size();
+    auto sizePK = paramsPK->GetParams().size();
+    if (sizePK > sizeQ)
         s.DropLastElements(sizePK - sizeQ);
-    }
 
+    KeyPair<Element> keyPair(std::make_shared<PublicKeyImpl<Element>>(cc),
+                             std::make_shared<PrivateKeyImpl<Element>>(cc));
     keyPair.secretKey->SetPrivateElement(std::move(s));
-    keyPair.publicKey->SetPublicElements(std::vector<Element>{std::move(b), std::move(a)});
+    keyPair.publicKey->SetPublicElements({std::move(b), std::move(a)});
     keyPair.publicKey->SetKeyTag(keyPair.secretKey->GetKeyTag());
-
     return keyPair;
 }
 
 template <class Element>
 Ciphertext<Element> PKEBase<Element>::Encrypt(Element plaintext, const PrivateKey<Element> privateKey) const {
-    Ciphertext<Element> ciphertext           = std::make_shared<CiphertextImpl<Element>>(privateKey);
-    std::shared_ptr<std::vector<Element>> ba = EncryptZeroCore(privateKey, nullptr);
+    auto ba = EncryptZeroCore(privateKey, nullptr);
     (*ba)[0] += plaintext;
 
-    ciphertext->SetElements({std::move((*ba)[0]), std::move((*ba)[1])});
-    ciphertext->SetNoiseScaleDeg(1);
-
-    return ciphertext;
+    auto ctxt = std::make_shared<CiphertextImpl<Element>>(privateKey);
+    ctxt->SetElements(std::move(*ba));
+    ctxt->SetNoiseScaleDeg(1);
+    return ctxt;
 }
 
 template <class Element>
 Ciphertext<Element> PKEBase<Element>::Encrypt(Element plaintext, const PublicKey<Element> publicKey) const {
-    Ciphertext<Element> ciphertext           = std::make_shared<CiphertextImpl<Element>>(publicKey);
-    std::shared_ptr<std::vector<Element>> ba = EncryptZeroCore(publicKey, nullptr);
-
+    auto ba = EncryptZeroCore(publicKey, nullptr);
     (*ba)[0] += plaintext;
 
-    ciphertext->SetElements({std::move((*ba)[0]), std::move((*ba)[1])});
-    ciphertext->SetNoiseScaleDeg(1);
-
-    return ciphertext;
+    auto ctxt = std::make_shared<CiphertextImpl<Element>>(publicKey);
+    ctxt->SetElements(std::move(*ba));
+    ctxt->SetNoiseScaleDeg(1);
+    return ctxt;
 }
 
 // makeSparse is not used by this scheme
@@ -125,18 +125,16 @@ std::shared_ptr<std::vector<Element>> PKEBase<Element>::EncryptZeroCore(const Pr
                                                                         const std::shared_ptr<ParmType> params) const {
     const auto cryptoParams =
         std::dynamic_pointer_cast<CryptoParametersRLWE<Element>>(privateKey->GetCryptoParameters());
+    const auto elementParams = (params == nullptr) ? cryptoParams->GetElementParams() : params;
 
-    const Element& s   = privateKey->GetPrivateElement();
-    const auto ns      = cryptoParams->GetNoiseScale();
-    const DggType& dgg = cryptoParams->GetDiscreteGaussianGenerator();
     DugType dug;
-
-    const std::shared_ptr<ParmType> elementParams = (params == nullptr) ? cryptoParams->GetElementParams() : params;
-
     Element a(dug, elementParams, Format::EVALUATION);
-    Element e(dgg, elementParams, Format::EVALUATION);
 
-    Element b = ns * e - a * s;
+    Element e(cryptoParams->GetDiscreteGaussianGenerator(), elementParams, Format::EVALUATION);
+    NativeInteger ns = cryptoParams->GetNoiseScale();
+
+    // {b = ns * e - a * s, a}
+    Element b(std::move((e *= ns) -= (a * privateKey->GetPrivateElement())));
 
     return std::make_shared<std::vector<Element>>(std::initializer_list<Element>({std::move(b), std::move(a)}));
 }
@@ -159,8 +157,8 @@ std::shared_ptr<std::vector<Element>> PKEBase<Element>::EncryptZeroCore(const Pu
     Element p0 = pk[0];
     Element p1 = pk[1];
 
-    usint sizeQ  = elementParams->GetParams().size();
-    usint sizePK = p0.GetParams()->GetParams().size();
+    uint32_t sizeQ  = elementParams->GetParams().size();
+    uint32_t sizePK = p0.GetParams()->GetParams().size();
 
     if (sizePK > sizeQ) {
         p0.DropLastElements(sizePK - sizeQ);
@@ -192,10 +190,9 @@ Element PKEBase<Element>::DecryptCore(const std::vector<Element>& cv, const Priv
     b.SetFormat(Format::EVALUATION);
 
     Element ci;
-    for (size_t i = 1; i < cv.size(); i++) {
+    for (size_t i = 1; i < cv.size(); ++i) {
         ci = cv[i];
         ci.SetFormat(Format::EVALUATION);
-
         b += sPower * ci;
         sPower *= s;
     }

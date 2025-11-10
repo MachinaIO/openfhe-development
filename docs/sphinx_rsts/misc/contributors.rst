@@ -31,9 +31,11 @@ We gratefully acknowledge intellectual and software contributions to the library
 
 * Saroja Erabelli (Duality Technologies)
 
+* Huijing Gong (Intel Labs)
+
 * Arnab Bobby Deb Gupta (New Jersey Institute of Technology)
 
-* Shai Halevi (Algorand Foundation, IBM Research)
+* Shai Halevi (Algorand Foundation, IBM Research, AWS)
 
 * DeokHwa Hong (Inha University)
 
@@ -49,7 +51,11 @@ We gratefully acknowledge intellectual and software contributions to the library
 
 * Andrey Kim (Samsung Advanced Institute of Technology)
 
+* Duhyeong Kim (Intel Labs)
+
 * Kevin King (Massachusetts Institute of Technology)
+
+* Jeremy Kun (Google)
 
 * Yongwoo Lee (Samsung Advanced Institute of Technology, Inha University)
 
@@ -93,6 +99,8 @@ We gratefully acknowledge intellectual and software contributions to the library
 
 * Victor Shoup (New York University)
 
+* Fillipe Souza (Intel Corporation)
+
 * David Stott (CACI / LGS Innovations (Lucent Government Systems))
 
 * Dmitriy Suponitskiy (Duality Technologies)
@@ -102,6 +110,8 @@ We gratefully acknowledge intellectual and software contributions to the library
 * Vinod Vaikuntanathan (Massachusetts Institute of Technology & Duality Technologies)
 
 * Michael Walter (University of California San Diego)
+
+* Hongren Zheng (Tsinghua University)
 
 * Vincent Zucca (Universite de Perpignan Via Domitia, LIRMM, University of Montpellier, KU Leuven)
 

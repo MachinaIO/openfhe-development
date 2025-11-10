@@ -100,7 +100,7 @@ protected:
    */
     CryptoParametersRNS(std::shared_ptr<ParmType> params, const PlaintextModulus& plaintextModulus,
                         float distributionParameter, float assuranceMeasure, SecurityLevel securityLevel,
-                        usint digitSize, SecretKeyDist secretKeyDist, int maxRelinSkDeg = 2,
+                        uint32_t digitSize, SecretKeyDist secretKeyDist, int maxRelinSkDeg = 2,
                         KeySwitchTechnique ksTech = BV, ScalingTechnique scalTech = FIXEDMANUAL,
                         EncryptionTechnique encTech = STANDARD, MultiplicationTechnique multTech = HPS,
                         MultipartyMode multipartyMode                         = FIXED_NOISE_MULTIPARTY,
@@ -119,7 +119,7 @@ protected:
     }
 
     CryptoParametersRNS(std::shared_ptr<ParmType> params, EncodingParams encodingParams, float distributionParameter,
-                        float assuranceMeasure, SecurityLevel securityLevel, usint digitSize,
+                        float assuranceMeasure, SecurityLevel securityLevel, uint32_t digitSize,
                         SecretKeyDist secretKeyDist, int maxRelinSkDeg = 2, KeySwitchTechnique ksTech = BV,
                         ScalingTechnique scalTech = FIXEDMANUAL, EncryptionTechnique encTech = STANDARD,
                         MultiplicationTechnique multTech = HPS, ProxyReEncryptionMode PREMode = INDCPA,
@@ -128,7 +128,9 @@ protected:
                         DecryptionNoiseMode decryptionNoiseMode = FIXED_NOISE_DECRYPT, PlaintextModulus noiseScale = 1,
                         uint32_t statisticalSecurity = 30, uint32_t numAdversarialQueries = 1,
                         uint32_t thresholdNumOfParties                        = 1,
-                        COMPRESSION_LEVEL mPIntBootCiphertextCompressionLevel = COMPRESSION_LEVEL::SLACK)
+                        COMPRESSION_LEVEL mPIntBootCiphertextCompressionLevel = COMPRESSION_LEVEL::SLACK,
+                        uint32_t compositeDegree = BASE_NUM_LEVELS_TO_DROP, uint32_t registerWordSize = NATIVEINT,
+                        CKKSDataType ckksDataType = REAL)
         : CryptoParametersRLWE<DCRTPoly>(std::move(params), std::move(encodingParams), distributionParameter,
                                          assuranceMeasure, securityLevel, digitSize, maxRelinSkDeg, secretKeyDist,
                                          PREMode, multipartyMode, executionMode, decryptionNoiseMode, noiseScale,
@@ -138,9 +140,36 @@ protected:
         m_encTechnique                        = encTech;
         m_multTechnique                       = multTech;
         m_MPIntBootCiphertextCompressionLevel = mPIntBootCiphertextCompressionLevel;
+        m_compositeDegree                     = compositeDegree;
+        m_registerWordSize                    = registerWordSize;
+        m_ckksDataType                        = ckksDataType;
     }
 
-    virtual ~CryptoParametersRNS() {}
+    ~CryptoParametersRNS() override = default;
+
+    /**
+    * @brief CompareTo() is a method to compare two CryptoParametersRNS objects.
+    *        It is called by CryptoParametersBase::operator==()
+    * @param rhs - the other CryptoParametersRNS object to compare to.
+    * @return whether the two CryptoParametersRNS objects are equivalent.
+    */
+    bool CompareTo(const CryptoParametersBase<DCRTPoly>& rhs) const override {
+        auto el = dynamic_cast<const CryptoParametersRNS*>(&rhs);
+        if (!el)
+            return false;
+
+        return CryptoParametersRLWE<DCRTPoly>::CompareTo(rhs) && m_scalTechnique == el->m_scalTechnique &&
+               m_ksTechnique == el->m_ksTechnique && m_multTechnique == el->m_multTechnique &&
+               m_encTechnique == el->m_encTechnique && m_numPartQ == el->m_numPartQ && m_auxBits == el->m_auxBits &&
+               m_extraBits == el->m_extraBits && m_PREMode == el->m_PREMode &&
+               m_multipartyMode == el->m_multipartyMode && m_executionMode == el->m_executionMode &&
+               m_compositeDegree == el->m_compositeDegree && m_registerWordSize == el->m_registerWordSize &&
+               m_ckksDataType == el->m_ckksDataType;
+    }
+
+    void PrintParameters(std::ostream& os) const override {
+        CryptoParametersRLWE<DCRTPoly>::PrintParameters(os);
+    }
 
 public:
     /**
@@ -166,13 +195,14 @@ public:
    * @param extraModulusSize bit size for extra modulus in FLEXIBLEAUTOEXT (CKKS and BGV only)
    * @param numPrimes number of moduli witout extraModulus
    * @param auxBits size of auxiliar moduli used for hybrid key switching
+   * @param scalTech scaling technique
    * @param addOne should an extra bit be added (for CKKS and BGV)
    *
    * @return log2 of the modulus and number of RNS limbs.
    */
     static std::pair<double, uint32_t> EstimateLogP(uint32_t numPartQ, double firstModulusSize, double dcrtBits,
                                                     double extraModulusSize, uint32_t numPrimes, uint32_t auxBits,
-                                                    bool addOne = false);
+                                                    ScalingTechnique scalTech, bool addOne = false);
 
     /*
    * Estimates the extra modulus bitsize needed for threshold FHE noise flooding (only for BGV and BFV)
@@ -181,28 +211,6 @@ public:
    */
     static constexpr double EstimateMultipartyFloodingLogQ() {
         return static_cast<double>(NoiseFlooding::MULTIPARTY_MOD_SIZE * NoiseFlooding::NUM_MODULI_MULTIPARTY);
-    }
-
-    /**
-   * == operator to compare to this instance of CryptoParametersBase object.
-   *
-   * @param &rhs CryptoParameters to check equality against.
-   */
-    bool operator==(const CryptoParametersBase<DCRTPoly>& rhs) const override {
-        const auto* el = dynamic_cast<const CryptoParametersRNS*>(&rhs);
-
-        if (el == nullptr)
-            return false;
-
-        return CryptoParametersBase<DCRTPoly>::operator==(rhs) && m_scalTechnique == el->GetScalingTechnique() &&
-               m_ksTechnique == el->GetKeySwitchTechnique() && m_multTechnique == el->GetMultiplicationTechnique() &&
-               m_encTechnique == el->GetEncryptionTechnique() && m_numPartQ == el->GetNumPartQ() &&
-               m_auxBits == el->GetAuxBits() && m_extraBits == el->GetExtraBits() && m_PREMode == el->GetPREMode() &&
-               m_multipartyMode == el->GetMultipartyMode() && m_executionMode == el->GetExecutionMode();
-    }
-
-    void PrintParameters(std::ostream& os) const override {
-        CryptoParametersBase<DCRTPoly>::PrintParameters(os);
     }
 
     /////////////////////////////////////
@@ -279,7 +287,7 @@ public:
    *
    * @return the pre-computed values.
    */
-    const NativeInteger& GetNegtInvModq(usint l) const {
+    NativeInteger GetNegtInvModq(uint32_t l) const {
         return m_negtInvModq[l];
     }
 
@@ -288,7 +296,7 @@ public:
    *
    * @return the pre-computed values.
    */
-    const NativeInteger& GetNegtInvModqPrecon(usint l) const {
+    NativeInteger GetNegtInvModqPrecon(uint32_t l) const {
         return m_negtInvModqPrecon[l];
     }
 
@@ -603,12 +611,13 @@ public:
     /**
    * Method to retrieve the scaling factor of level l.
    * For FIXEDMANUAL scaling technique method always returns 2^p, where p corresponds to plaintext modulus
-   * @param l For FLEXIBLEAUTO scaling technique the level whose scaling factor we want to learn.
+   * @param l For FLEXIBLEAUTO and COMPOSITESCALING scaling techniques the level whose scaling factor we want to learn.
    * Levels start from 0 (no scaling done - all towers) and go up to K-1, where K is the number of towers supported.
    * @return the scaling factor.
    */
     double GetScalingFactorReal(uint32_t l = 0) const {
-        if (m_scalTechnique == FLEXIBLEAUTO || m_scalTechnique == FLEXIBLEAUTOEXT) {
+        if (m_scalTechnique == FLEXIBLEAUTO || m_scalTechnique == FLEXIBLEAUTOEXT ||
+            m_scalTechnique == COMPOSITESCALINGAUTO || m_scalTechnique == COMPOSITESCALINGMANUAL) {
             if (l >= m_scalingFactorsReal.size()) {
                 // TODO: Return an error here.
                 return m_approxSF;
@@ -621,7 +630,8 @@ public:
     }
 
     double GetScalingFactorRealBig(uint32_t l = 0) const {
-        if (m_scalTechnique == FLEXIBLEAUTO || m_scalTechnique == FLEXIBLEAUTOEXT) {
+        if (m_scalTechnique == FLEXIBLEAUTO || m_scalTechnique == FLEXIBLEAUTOEXT ||
+            m_scalTechnique == COMPOSITESCALINGAUTO || m_scalTechnique == COMPOSITESCALINGMANUAL) {
             if (l >= m_scalingFactorsRealBig.size()) {
                 // TODO: Return an error here.
                 return m_approxSF;
@@ -636,15 +646,42 @@ public:
     /**
    * Method to retrieve the modulus to be dropped of level l.
    * For FIXEDMANUAL rescaling technique method always returns 2^p, where p corresponds to plaintext modulus
-   * @param l index of modulus to be dropped for FLEXIBLEAUTO scaling technique
+   * @param l index of modulus to be dropped for FLEXIBLEAUTO and COMPOSITESCALING scaling techniques
    * @return the precomputed table
    */
     double GetModReduceFactor(uint32_t l = 0) const {
-        if (m_scalTechnique == FLEXIBLEAUTO || m_scalTechnique == FLEXIBLEAUTOEXT) {
+        if (m_scalTechnique == FLEXIBLEAUTO || m_scalTechnique == FLEXIBLEAUTOEXT ||
+            m_scalTechnique == COMPOSITESCALINGAUTO || m_scalTechnique == COMPOSITESCALINGMANUAL) {
             return m_dmoduliQ[l];
         }
 
         return m_approxSF;
+    }
+
+    /////////////////////////////////////
+    // CKKS RNS Composite Scaling Params
+    /////////////////////////////////////
+
+    /**
+     * Returns the composite scaling degree d. Its values is determined at runtime based on
+     * input scaling factor and architecture register size (e.g., 32 bits, 48 bits, 64 bits).
+     * This parameter is only relevant when using the CKKS scheme and .
+     *
+     * @return the composite degree value for COMPOSITESCALING scaling technique
+     **/
+    uint32_t const& GetCompositeDegree() const {
+        // If not CKKS scheme, same value as BASE_NUM_LEVELS_TO_DROP
+        return m_compositeDegree;
+    }
+    /**
+     * Returns the architecture register word size (e.g., 32 bits, 48 bits, 64 bits).
+     * Used to determine the size of prime moduli in the CKKS scheme on
+     * composite scaling mode (COMPOSITESCALINGAUTO).
+     *
+     * @return the register word size for COMPOSITESCALING scaling technique
+     **/
+    uint32_t const& GetRegisterWordSize() const {
+        return m_registerWordSize;
     }
 
     /////////////////////////////////////
@@ -681,15 +718,15 @@ public:
     // BFVrns : Mult : ExpandCRTBasis
     /////////////////////////////////////
 
-    const std::shared_ptr<ILDCRTParams<BigInteger>> GetParamsQl(usint l = 0) const {
+    const std::shared_ptr<ILDCRTParams<BigInteger>> GetParamsQl(uint32_t l = 0) const {
         return m_paramsQl[l];
     }
 
-    const std::vector<double>& GetQlQHatInvModqDivqFrac(usint l) const {
+    const std::vector<double>& GetQlQHatInvModqDivqFrac(uint32_t l) const {
         return m_QlQHatInvModqDivqFrac[l];
     }
 
-    const std::vector<std::vector<NativeInteger>>& GetQlQHatInvModqDivqModq(usint l) const {
+    const std::vector<std::vector<NativeInteger>>& GetQlQHatInvModqDivqModq(uint32_t l) const {
         return m_QlQHatInvModqDivqModq[l];
     }
 
@@ -699,7 +736,7 @@ public:
    *
    * @return the precomputed CRT params
    */
-    const std::shared_ptr<ILDCRTParams<BigInteger>> GetParamsRl(usint l = 0) const {
+    const std::shared_ptr<ILDCRTParams<BigInteger>> GetParamsRl(uint32_t l = 0) const {
         return m_paramsRl[l];
     }
 
@@ -709,7 +746,7 @@ public:
    *
    * @return the precomputed CRT params
    */
-    const std::shared_ptr<ILDCRTParams<BigInteger>> GetParamsQlRl(usint l = 0) const {
+    const std::shared_ptr<ILDCRTParams<BigInteger>> GetParamsQlRl(uint32_t l = 0) const {
         return m_paramsQlRl[l];
     }
 
@@ -718,7 +755,7 @@ public:
    *
    * @return the precomputed table
    */
-    const std::vector<NativeInteger>& GetQlHatInvModq(usint l = 0) const {
+    const std::vector<NativeInteger>& GetQlHatInvModq(uint32_t l = 0) const {
         return m_QlHatInvModq[l];
     }
 
@@ -727,7 +764,7 @@ public:
    *
    * @return the precomputed table
    */
-    const std::vector<NativeInteger>& GetQlHatInvModqPrecon(usint l = 0) const {
+    const std::vector<NativeInteger>& GetQlHatInvModqPrecon(uint32_t l = 0) const {
         return m_QlHatInvModqPrecon[l];
     }
 
@@ -736,7 +773,7 @@ public:
    *
    * @return the precomputed table
    */
-    const std::vector<std::vector<NativeInteger>>& GetQlHatModr(usint l = 0) const {
+    const std::vector<std::vector<NativeInteger>>& GetQlHatModr(uint32_t l = 0) const {
         return m_QlHatModr[l];
     }
 
@@ -745,23 +782,23 @@ public:
    *
    * @return the precomputed table
    */
-    const std::vector<std::vector<NativeInteger>>& GetalphaQlModr(usint l = 0) const {
+    const std::vector<std::vector<NativeInteger>>& GetalphaQlModr(uint32_t l = 0) const {
         return m_alphaQlModr[l];
     }
 
-    const std::vector<NativeInteger>& GetmNegRlQHatInvModq(usint l = 0) const {
+    const std::vector<NativeInteger>& GetmNegRlQHatInvModq(uint32_t l = 0) const {
         return m_negRlQHatInvModq[l];
     }
 
-    const std::vector<NativeInteger>& GetmNegRlQHatInvModqPrecon(usint l = 0) const {
+    const std::vector<NativeInteger>& GetmNegRlQHatInvModqPrecon(uint32_t l = 0) const {
         return m_negRlQHatInvModqPrecon[l];
     }
 
-    const std::vector<NativeInteger>& GetmNegRlQlHatInvModq(usint l = 0) const {
+    const std::vector<NativeInteger>& GetmNegRlQlHatInvModq(uint32_t l = 0) const {
         return m_negRlQlHatInvModq[l];
     }
 
-    const std::vector<NativeInteger>& GetmNegRlQlHatInvModqPrecon(usint l = 0) const {
+    const std::vector<NativeInteger>& GetmNegRlQlHatInvModqPrecon(uint32_t l = 0) const {
         return m_negRlQlHatInvModqPrecon[l];
     }
 
@@ -820,7 +857,7 @@ public:
    *
    * @return the precomputed table
    */
-    const std::vector<NativeInteger>& GetRlHatInvModr(usint l = 0) const {
+    const std::vector<NativeInteger>& GetRlHatInvModr(uint32_t l = 0) const {
         return m_RlHatInvModr[l];
     }
 
@@ -829,7 +866,7 @@ public:
    *
    * @return the precomputed table
    */
-    const std::vector<NativeInteger>& GetRlHatInvModrPrecon(usint l = 0) const {
+    const std::vector<NativeInteger>& GetRlHatInvModrPrecon(uint32_t l = 0) const {
         return m_RlHatInvModrPrecon[l];
     }
 
@@ -838,7 +875,7 @@ public:
    *
    * @return the precomputed table
    */
-    const std::vector<std::vector<NativeInteger>>& GetRlHatModq(usint l = 0) const {
+    const std::vector<std::vector<NativeInteger>>& GetRlHatModq(uint32_t l = 0) const {
         return m_RlHatModq[l];
     }
 
@@ -847,23 +884,23 @@ public:
    *
    * @return the precomputed table
    */
-    const std::vector<std::vector<NativeInteger>>& GetalphaRlModq(usint l = 0) const {
+    const std::vector<std::vector<NativeInteger>>& GetalphaRlModq(uint32_t l = 0) const {
         return m_alphaRlModq[l];
     }
 
-    const std::vector<double>& GettQlSlHatInvModsDivsFrac(usint l) const {
+    const std::vector<double>& GettQlSlHatInvModsDivsFrac(uint32_t l) const {
         return m_tQlSlHatInvModsDivsFrac[l];
     }
 
-    const std::vector<std::vector<NativeInteger>>& GettQlSlHatInvModsDivsModq(usint l) const {
+    const std::vector<std::vector<NativeInteger>>& GettQlSlHatInvModsDivsModq(uint32_t l) const {
         return m_tQlSlHatInvModsDivsModq[l];
     }
 
-    const std::vector<NativeInteger>& GetQlHatModq(usint l) const {
+    const std::vector<NativeInteger>& GetQlHatModq(uint32_t l) const {
         return m_QlHatModq[l];
     }
 
-    const std::vector<NativeInteger>& GetQlHatModqPrecon(usint l) const {
+    const std::vector<NativeInteger>& GetQlHatModqPrecon(uint32_t l) const {
         return m_QlHatModqPrecon[l];
     }
 
@@ -937,8 +974,9 @@ public:
         return m_tQHatInvModqBDivqModtPrecon;
     }
 
-    const NativeInteger& GetScalingFactorInt(usint l) const {
-        if (m_scalTechnique == FLEXIBLEAUTO || m_scalTechnique == FLEXIBLEAUTOEXT) {
+    NativeInteger GetScalingFactorInt(uint32_t l) const {
+        if (m_scalTechnique == FLEXIBLEAUTO || m_scalTechnique == FLEXIBLEAUTOEXT ||
+            m_scalTechnique == COMPOSITESCALINGAUTO || m_scalTechnique == COMPOSITESCALINGMANUAL) {
             if (l >= m_scalingFactorsInt.size()) {
                 // TODO: Return an error here.
                 return m_fixedSF;
@@ -948,8 +986,9 @@ public:
         return m_fixedSF;
     }
 
-    const NativeInteger& GetScalingFactorIntBig(usint l) const {
-        if (m_scalTechnique == FLEXIBLEAUTO || m_scalTechnique == FLEXIBLEAUTOEXT) {
+    NativeInteger GetScalingFactorIntBig(uint32_t l) const {
+        if (m_scalTechnique == FLEXIBLEAUTO || m_scalTechnique == FLEXIBLEAUTOEXT ||
+            m_scalTechnique == COMPOSITESCALINGAUTO || m_scalTechnique == COMPOSITESCALINGMANUAL) {
             if (l >= m_scalingFactorsIntBig.size()) {
                 // TODO: Return an error here.
                 return m_fixedSF;
@@ -959,8 +998,9 @@ public:
         return m_fixedSF;
     }
 
-    const NativeInteger& GetModReduceFactorInt(uint32_t l = 0) const {
-        if (m_scalTechnique == FLEXIBLEAUTO || m_scalTechnique == FLEXIBLEAUTOEXT) {
+    NativeInteger GetModReduceFactorInt(uint32_t l = 0) const {
+        if (m_scalTechnique == FLEXIBLEAUTO || m_scalTechnique == FLEXIBLEAUTOEXT ||
+            m_scalTechnique == COMPOSITESCALINGAUTO || m_scalTechnique == COMPOSITESCALINGMANUAL) {
             return m_qModt[l];
         }
         return m_fixedSF;
@@ -1288,7 +1328,7 @@ public:
    *
    * @return the precomputed table
    */
-    std::vector<NativeInteger> const& GetMultipartyQHatInvModqAtIndex(usint l) const {
+    std::vector<NativeInteger> const& GetMultipartyQHatInvModqAtIndex(uint32_t l) const {
         return m_multipartyQHatInvModq[l];
     }
 
@@ -1297,7 +1337,7 @@ public:
    *
    * @return the precomputed table
    */
-    std::vector<NativeInteger> const& GetMultipartyQHatInvModqPreconAtIndex(usint l) const {
+    std::vector<NativeInteger> const& GetMultipartyQHatInvModqPreconAtIndex(uint32_t l) const {
         return m_multipartyQHatInvModqPrecon[l];
     }
 
@@ -1306,7 +1346,7 @@ public:
    *
    * @return the precomputed table
    */
-    std::vector<std::vector<NativeInteger>> const& GetMultipartyQHatModq0AtIndex(usint l) const {
+    std::vector<std::vector<NativeInteger>> const& GetMultipartyQHatModq0AtIndex(uint32_t l) const {
         return m_multipartyQHatModq0[l];
     }
 
@@ -1315,7 +1355,7 @@ public:
    *
    * @return the precomputed table
    */
-    std::vector<std::vector<NativeInteger>> const& GetMultipartyAlphaQModq0AtIndex(usint l) const {
+    std::vector<std::vector<NativeInteger>> const& GetMultipartyAlphaQModq0AtIndex(uint32_t l) const {
         return m_multipartyAlphaQModq0[l];
     }
 
@@ -1346,6 +1386,15 @@ public:
    */
     COMPRESSION_LEVEL GetMPIntBootCiphertextCompressionLevel() const {
         return m_MPIntBootCiphertextCompressionLevel;
+    }
+
+    /**
+   * Method to retrieve the CKKS data type.
+   *
+   * @return the CKKS data type.
+   */
+    CKKSDataType GetCKKSDataType() const {
+        return m_ckksDataType;
     }
 
 protected:
@@ -1481,6 +1530,15 @@ protected:
 
     // Stores 2^ptm where ptm - plaintext modulus
     double m_approxSF = 0;
+
+    /////////////////////////////////////
+    // CKKS RNS Composite Scaling Params
+    /////////////////////////////////////
+
+    // Stores composite degree for composite modulus chain
+    uint32_t m_compositeDegree = BASE_NUM_LEVELS_TO_DROP;
+    // Stores the architecture register word size
+    uint32_t m_registerWordSize = NATIVEINT;
 
     /////////////////////////////////////
     // BFVrns : Encrypt
@@ -1775,6 +1833,9 @@ protected:
     /////////////////////////////////////
     COMPRESSION_LEVEL m_MPIntBootCiphertextCompressionLevel;
 
+    // CKKS Data Type
+    CKKSDataType m_ckksDataType;
+
 public:
     /////////////////////////////////////
     // SERIALIZATION
@@ -1791,6 +1852,9 @@ public:
         ar(cereal::make_nvp("ab", m_auxBits));
         ar(cereal::make_nvp("eb", m_extraBits));
         ar(cereal::make_nvp("ccl", m_MPIntBootCiphertextCompressionLevel));
+        ar(cereal::make_nvp("cd", m_compositeDegree));
+        ar(cereal::make_nvp("rws", m_registerWordSize));
+        ar(cereal::make_nvp("cdt", m_ckksDataType));
     }
 
     template <class Archive>
@@ -1816,6 +1880,9 @@ public:
         catch (cereal::Exception&) {
             m_MPIntBootCiphertextCompressionLevel = COMPRESSION_LEVEL::SLACK;
         }
+        ar(cereal::make_nvp("cd", m_compositeDegree));
+        ar(cereal::make_nvp("rws", m_registerWordSize));
+        ar(cereal::make_nvp("cdt", m_ckksDataType));
     }
 
     std::string SerializedObjectName() const override {

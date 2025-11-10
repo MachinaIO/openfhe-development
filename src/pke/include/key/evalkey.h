@@ -57,10 +57,11 @@ public:
    *
    * @param &cryptoParams is the reference to cryptoParams
    */
+    EvalKeyImpl() = default;
 
-    explicit EvalKeyImpl(CryptoContext<Element> cc = 0) : Key<Element>(cc) {}
+    explicit EvalKeyImpl(const CryptoContext<Element>& cc) : Key<Element>(cc) {}
 
-    virtual ~EvalKeyImpl() {}
+    virtual ~EvalKeyImpl() = default;
 
     /**
    * Setter function to store Relinearization Element Vector A.
@@ -128,102 +129,6 @@ public:
         OPENFHE_THROW("GetBVector operation not supported");
     }
 
-    /**
-   * Setter function to store key switch Element.
-   * Throws exception, to be overridden by derived class.
-   *
-   * @param &a is the Element to be copied.
-   */
-
-    virtual void SetA(const Element& a) {
-        OPENFHE_THROW("SetA copy operation not supported");
-    }
-
-    /**
-   * Setter function to store key switch Element.
-   * Throws exception, to be overridden by derived class.
-   *
-   * @param &&a is the Element to be moved.
-   */
-    virtual void SetA(Element&& a) {
-        OPENFHE_THROW("SetA move operation not supported");
-    }
-
-    /**
-   * Getter function to access key switch Element.
-   * Throws exception, to be overridden by derived class.
-   *
-   * @return  Element.
-   */
-
-    virtual const Element& GetA() const {
-        OPENFHE_THROW("GetA operation not supported");
-    }
-
-    /**
-   * Setter function to store key switch Element.
-   * Throws exception, to be overridden by derived class.
-   *
-   * @param &a is the Element to be copied.
-   */
-
-    virtual void SetAinDCRT(const DCRTPoly& a) {
-        OPENFHE_THROW("SetAinDCRT copy operation not supported");
-    }
-
-    /**
-   * Setter function to store key switch Element.
-   * Throws exception, to be overridden by derived class.
-   *
-   * @param &&a is the Element to be moved.
-   */
-    virtual void SetAinDCRT(DCRTPoly&& a) {
-        OPENFHE_THROW("SetAinDCRT move operation not supported");
-    }
-
-    /**
-   * Getter function to access key switch Element.
-   * Throws exception, to be overridden by derived class.
-   *
-   * @return  Element.
-   */
-
-    virtual const DCRTPoly& GetAinDCRT() const {
-        OPENFHE_THROW("GetAinDCRT operation not supported");
-    }
-
-    /**
-   * Setter function to store key switch Element.
-   * Throws exception, to be overridden by derived class.
-   *
-   * @param &b is the Element to be copied.
-   */
-
-    virtual void SetBinDCRT(const DCRTPoly& b) {
-        OPENFHE_THROW("SetAinDCRT copy operation not supported");
-    }
-
-    /**
-   * Setter function to store key switch Element.
-   * Throws exception, to be overridden by derived class.
-   *
-   * @param &&b is the Element to be moved.
-   */
-    virtual void SetBinDCRT(DCRTPoly&& b) {
-        OPENFHE_THROW("SetAinDCRT move operation not supported");
-    }
-
-    /**
-   * Getter function to access key switch Element.
-   * Throws exception, to be overridden by derived class.
-   *
-   * @return  Element.
-   */
-
-    virtual const DCRTPoly& GetBinDCRT() const {
-        OPENFHE_THROW("GetAinDCRT operation not supported");
-    }
-
     virtual void ClearKeys() {
         OPENFHE_THROW("ClearKeys operation is not supported");
     }
@@ -249,7 +154,8 @@ public:
     void load(Archive& ar, std::uint32_t const version) {
         ar(::cereal::base_class<Key<Element>>(this));
     }
-    std::string SerializedObjectName() const {
+
+    std::string SerializedObjectName() const override {
         return "EvalKey";
     }
 };

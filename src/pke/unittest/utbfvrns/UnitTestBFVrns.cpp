@@ -40,7 +40,7 @@
 using namespace lbcrypto;
 
 //===========================================================================================================
-enum TEST_CASE_TYPE {
+enum TEST_CASE_TYPE : int {
     EVAL_FAST_ROTATION = 0,
     COMPRESSED_BFV     = 1,
 };

@@ -46,13 +46,15 @@
 namespace lbcrypto {
 class MultipartyCKKSRNS : public MultipartyRNS {
 public:
-    virtual ~MultipartyCKKSRNS() {}
+    virtual ~MultipartyCKKSRNS() = default;
 
     DecryptResult MultipartyDecryptFusion(const std::vector<Ciphertext<DCRTPoly>>& ciphertextVec,
                                           Poly* plaintext) const override;
 
     DecryptResult MultipartyDecryptFusion(const std::vector<Ciphertext<DCRTPoly>>& ciphertextVec,
                                           NativePoly* plaintext) const override;
+
+    Ciphertext<DCRTPoly> IntBootAdjustScale(ConstCiphertext<DCRTPoly> ciphertext) const override;
 
     Ciphertext<DCRTPoly> IntMPBootAdjustScale(ConstCiphertext<DCRTPoly> ciphertext) const override;
 

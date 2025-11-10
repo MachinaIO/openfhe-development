@@ -4,17 +4,18 @@ on:
   pull_request:
     branches:
       - main
+      - dev
 
 jobs:
   call:
     uses: openfheorg/openfhe-development/.github/workflows/generic_workflow.yml@github-ci
     with:
       runner: ${{ vars.RUNNER }}
-      compiler: "GCC-11"
-      native_backend: "64"
-      mb2_jobs: "all"
-      mb4_jobs: "all"
-      mb6_jobs: "all"
+      compiler: "GCC-14"
+      native_backend: "all"
+      mb2_jobs: "mb2"
+      mb4_jobs: "mb4_tcm"
+      mb6_jobs: "mb6"
       # cmake_args_map holds job specific additional cmake options. compiler flags, native_backend flag and
       # OpenMP flag are set in generic_workflow.yml
       cmake_args_map: '{
@@ -29,4 +30,3 @@ jobs:
                   "mb6_ntl_tcm"       : "-DBUILD_EXTRAS=ON -DMATHBACKEND=6 -DWITH_NTL=ON -DWITH_TCM=ON",
                   "mb6_ntl_debug_tcm" : "-DBUILD_EXTRAS=ON -DMATHBACKEND=6 -DWITH_NTL=ON -DWITH_TCM=ON -DCMAKE_BUILD_TYPE=Debug",
                 }'
-      

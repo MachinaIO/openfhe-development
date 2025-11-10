@@ -42,7 +42,7 @@
 using namespace lbcrypto;
 
 //===========================================================================================================
-enum TEST_CASE_TYPE {
+enum TEST_CASE_TYPE : int {
     CKKSRNS_TEST = 0,
     BFVRNS_TEST,
     BGVRNS_TEST,
