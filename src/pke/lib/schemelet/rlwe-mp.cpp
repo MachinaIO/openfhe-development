@@ -198,6 +198,42 @@ std::vector<Poly> SchemeletRLWEMP::EncryptCoeff(std::vector<int64_t> input, cons
     return {bPoly += mPoly, aPoly};
 }
 
+std::vector<Poly> SchemeletRLWEMP::EncryptCoeffWithZeroB(const BigInteger& Q, const DCRTPoly a,
+                                                         const std::shared_ptr<ILDCRTParams<DCRTPoly::Integer>>& ep) {
+    // DugType dug;
+    // DCRTPoly a(dug, ep, Format::EVALUATION);
+
+    // auto scopy(privateKey->GetPrivateElement());
+    // scopy.DropLastElements(scopy.GetParams()->GetParams().size() - ep->GetParams().size());
+
+    DCRTPoly b = a - a;
+
+    // a.SetFormat(Format::COEFFICIENT);
+    auto aPoly = a.CRTInterpolate();
+    b.SetFormat(Format::COEFFICIENT);
+    auto bPoly = b.CRTInterpolate();
+
+    BigInteger bigQPrime = b.GetModulus();
+
+    // Do modulus switching from Q' to Q
+    if (Q < bigQPrime) {
+        bPoly = bPoly.MultiplyAndRound(Q, bigQPrime);
+        bPoly.SwitchModulus(Q, 1, 0, 0);
+
+        aPoly = aPoly.MultiplyAndRound(Q, bigQPrime);
+        aPoly.SwitchModulus(Q, 1, 0, 0);
+    }
+    else {
+        bPoly.SwitchModulus(Q, 1, 0, 0);
+        bPoly = bPoly.MultiplyAndRound(Q, bigQPrime);
+
+        aPoly.SwitchModulus(Q, 1, 0, 0);
+        aPoly = aPoly.MultiplyAndRound(Q, bigQPrime);
+    }
+
+    return {bPoly, aPoly};
+}
+
 std::vector<int64_t> SchemeletRLWEMP::DecryptCoeff(const std::vector<Poly>& input, const BigInteger& Q,
                                                    const BigInteger& p, const PrivateKey<DCRTPoly>& privateKey,
                                                    const std::shared_ptr<ILDCRTParams<DCRTPoly::Integer>>& ep,
