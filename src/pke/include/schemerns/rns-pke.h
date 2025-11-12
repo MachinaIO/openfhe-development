@@ -106,6 +106,15 @@ public:
     DecryptResult Decrypt(ConstCiphertext<DCRTPoly> ciphertext, const PrivateKey<DCRTPoly> privateKey,
                           Poly* plaintext) const override;
 
+    /**
+   * Constructs a ciphertext whose first component is zero and whose second
+   * component equals the provided polynomial (interpreted as c[1]).
+   *
+   * @param c1 polynomial used as the c[1] entry of the ciphertext.
+   * @return ciphertext with cv[0] = 0 and cv[1] = c1.
+   */
+    Ciphertext<DCRTPoly> EncryptWithZeroC0(const DCRTPoly& c1) const;
+
     /////////////////////////////////////
     // CORE OPERATIONS
     /////////////////////////////////////
