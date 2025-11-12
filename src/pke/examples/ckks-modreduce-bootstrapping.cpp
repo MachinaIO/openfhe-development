@@ -97,13 +97,14 @@ void ModReduceBootstrapExample() {
     * using GetBootstrapDepth, and add it to levelsAvailableAfterBootstrap to set our initial multiplicative
     * depth. We recommend using the input parameters below to get started.
     */
-    std::vector<uint32_t> levelBudget = {4, 4};
+    std::vector<uint32_t> levelBudget = {1, 1};
 
     // Note that the actual number of levels avalailable after bootstrapping before next bootstrapping
     // will be levelsAvailableAfterBootstrap - 1 because an additional level
     // is used for scaling the ciphertext before next bootstrapping (in 64-bit CKKS bootstrapping)
-    uint32_t levelsAvailableAfterBootstrap = 10;
+    uint32_t levelsAvailableAfterBootstrap = 0;
     usint depth = levelsAvailableAfterBootstrap + FHECKKSRNS::GetBootstrapDepth(levelBudget, secretKeyDist);
+    std::cout << "CKKS scheme is using depth " << depth << std::endl;
     parameters.SetMultiplicativeDepth(depth);
 
     CryptoContext<DCRTPoly> cryptoContext = GenCryptoContext(parameters);
@@ -117,7 +118,7 @@ void ModReduceBootstrapExample() {
     usint ringDim = cryptoContext->GetRingDimension();
     // This is the maximum number of slots that can be used for full packing.
     usint numSlots = ringDim / 2;
-    std::cout << "CKKS scheme is using ring dimension " << ringDim << std::endl << std::endl;
+    std::cout << "CKKS scheme is using ring dimension " << ringDim << std::endl;
 
     cryptoContext->EvalBootstrapSetup(levelBudget);
 
@@ -125,29 +126,77 @@ void ModReduceBootstrapExample() {
     cryptoContext->EvalMultKeyGen(keyPair.secretKey);
     cryptoContext->EvalBootstrapKeyGen(keyPair.secretKey, numSlots);
 
-    std::vector<double> x = {0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0};
-    size_t encodedLength  = x.size();
+    //----------------------------------------------------------------------------
+    // Custom flow: build a ciphertext via EncryptWithZeroC0, mod-reduce down to q0,
+    // then bootstrap it back to modulus Q.
+    //----------------------------------------------------------------------------
+    // Extract a random c1 component from an encryption of zero.
+    auto zeroComponents = cryptoContext->GetScheme()->EncryptZeroCore(keyPair.publicKey);
+    DCRTPoly c1         = (*zeroComponents)[1];
+    c1.SetFormat(Format::EVALUATION);
 
-    // We start with a depleted ciphertext that has used up all of its levels.
-    Plaintext ptxt = cryptoContext->MakeCKKSPackedPlaintext(x, 1, depth - 1);
+    DCRTPoly zeroC0(c1);
+    zeroC0.SetValuesToZero();
+    zeroC0.SetFormat(Format::EVALUATION);
 
-    ptxt->SetLength(encodedLength);
-    std::cout << "Input: " << ptxt << std::endl;
+    // Create the artificial ciphertext with c0 = 0 and the desired c1.
+    Ciphertext<DCRTPoly> manualCiphertext(std::make_shared<CiphertextImpl<DCRTPoly>>(keyPair.publicKey));
+    manualCiphertext->SetElements({std::move(zeroC0), c1});
+    manualCiphertext->SetNoiseScaleDeg(1);
+    manualCiphertext->SetLevel(0);
+    manualCiphertext->SetSlots(numSlots);
 
-    Ciphertext<DCRTPoly> ciph = cryptoContext->Encrypt(keyPair.publicKey, ptxt);
+    const auto cryptoParams  = std::dynamic_pointer_cast<CryptoParametersCKKSRNS>(cryptoContext->GetCryptoParameters());
+    const auto elementParams = cryptoParams->GetElementParams();
+    const auto& qVec         = elementParams->GetParams();
+    std::cout << "qVec size: " << qVec.size() << std::endl;
+    double ql = qVec[qVec.size() - 1]->GetModulus().ConvertToDouble();
+    // double bigQ         = elementParams->GetModulus().ConvertToDouble();
+    // double deltaQoverQ0 = bigQ / q0;
+    // std::cout << "deltaQoverQ0: " << deltaQoverQ0 << std::endl;
+    manualCiphertext->SetScalingFactor(ql);
 
-    std::cout << "Initial number of levels remaining: " << depth - ciph->GetLevel() << std::endl;
+    std::cout << "Manual ciphertext before ModReduce -> level: " << manualCiphertext->GetLevel()
+              << ", scaling factor: " << manualCiphertext->GetScalingFactor() << std::endl;
 
-    // Perform the bootstrapping operation. The goal is to increase the number of levels remaining
-    // for HE computation.
-    auto ciphertextAfter = cryptoContext->EvalBootstrap(ciph);
+    // Drop every tower except the first one so that the ciphertext lives modulo q0.
+    // for (size_t i = 1; i < qVec.size(); ++i) {
+    //     cryptoContext->ModReduceInPlace(manualCiphertext);
+    // }
+    cryptoContext->ModReduceInPlace(manualCiphertext);
+    // manualCiphertext->SetScalingFactor(1.0);
 
-    std::cout << "Number of levels remaining after bootstrapping: "
-              << depth - ciphertextAfter->GetLevel() - (ciphertextAfter->GetNoiseScaleDeg() - 1) << std::endl
+    std::cout << "After ModReduce -> level: " << manualCiphertext->GetLevel()
+              << ", scaling factor: " << manualCiphertext->GetScalingFactor() << std::endl;
+
+    auto manualBootstrapped = cryptoContext->EvalBootstrap(manualCiphertext);
+    std::cout << "After EvalBootstrap (manual flow) -> level: " << manualBootstrapped->GetLevel()
+              << ", scaling factor: " << manualBootstrapped->GetScalingFactor() << std::endl
               << std::endl;
 
-    Plaintext result;
-    cryptoContext->Decrypt(keyPair.secretKey, ciphertextAfter, &result);
-    result->SetLength(encodedLength);
-    std::cout << "Output after bootstrapping \n\t" << result << std::endl;
+    // std::vector<double> x = {0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0};
+    // size_t encodedLength  = x.size();
+
+    // // We start with a depleted ciphertext that has used up all of its levels.
+    // Plaintext ptxt = cryptoContext->MakeCKKSPackedPlaintext(x, 1, depth - 1);
+
+    // ptxt->SetLength(encodedLength);
+    // std::cout << "Input: " << ptxt << std::endl;
+
+    // Ciphertext<DCRTPoly> ciph = cryptoContext->Encrypt(keyPair.publicKey, ptxt);
+
+    // std::cout << "Initial number of levels remaining: " << depth - ciph->GetLevel() << std::endl;
+
+    // // Perform the bootstrapping operation. The goal is to increase the number of levels remaining
+    // // for HE computation.
+    // auto ciphertextAfter = cryptoContext->EvalBootstrap(ciph);
+
+    // std::cout << "Number of levels remaining after bootstrapping: "
+    //           << depth - ciphertextAfter->GetLevel() - (ciphertextAfter->GetNoiseScaleDeg() - 1) << std::endl
+    //           << std::endl;
+
+    // Plaintext result;
+    // cryptoContext->Decrypt(keyPair.secretKey, ciphertextAfter, &result);
+    // result->SetLength(encodedLength);
+    // std::cout << "Output after bootstrapping \n\t" << result << std::endl;
 }
