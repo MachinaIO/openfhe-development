@@ -59,6 +59,11 @@ public:
                                              const std::shared_ptr<ILDCRTParams<DCRTPoly::Integer>>& elementParams,
                                              uint32_t numSlots, uint32_t length = 0, bool bitReverse = false);
 
+    static std::vector<int64_t> DecryptCoeffWithoutRound(const std::vector<Poly>& input, const BigInteger& Q,
+                                                         const PrivateKey<DCRTPoly>& privateKey,
+                                                         const std::shared_ptr<ILDCRTParams<DCRTPoly::Integer>>& ep,
+                                                         uint32_t numSlots, uint32_t length, bool bitReverse);
+
     static void ModSwitch(std::vector<Poly>& input, const BigInteger& Q1, const BigInteger& Q2);
 
     static Ciphertext<DCRTPoly> ConvertRLWEToCKKS(const CryptoContextImpl<DCRTPoly>& cc,
