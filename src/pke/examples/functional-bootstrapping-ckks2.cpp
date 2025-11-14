@@ -112,7 +112,7 @@ void IdentityLUT(BigInteger QBFVInit, BigInteger PInput, BigInteger POutput, Big
     uint32_t dcrtBits                       = Bigq.GetMSB() - 1;
     uint32_t firstMod                       = Bigq.GetMSB() - 1;
     uint32_t levelsAvailableAfterBootstrap  = 2;
-    uint32_t levelsAvailableBeforeBootstrap = 6;
+    uint32_t levelsAvailableBeforeBootstrap = 0;
     uint32_t dnum                           = 3;
     SecretKeyDist secretKeyDist             = SPARSE_ENCAPSULATED;
     std::vector<uint32_t> lvlb              = {3, 3};
@@ -169,7 +169,7 @@ void IdentityLUT(BigInteger QBFVInit, BigInteger PInput, BigInteger POutput, Big
     DCRTPoly::DugType dug;
     DCRTPoly a(dug, ep, Format::EVALUATION);
     a.SetFormat(COEFFICIENT);
-    auto ctxtBFV = SchemeletRLWEMP::EncryptCoeffWithZeroB(QBFVInit, a, ep);
+    auto ctxtBFV = SchemeletRLWEMP::EncryptCoeffWithZeroB(QBFVInit, a);
 
     // std::cout << "RLWE ciphertext obtained" << std::endl;
     // std::cout << "Q: " << Q << std::endl;

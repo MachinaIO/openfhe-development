@@ -51,8 +51,7 @@ public:
                                           const std::shared_ptr<ILDCRTParams<DCRTPoly::Integer>>& elementParams,
                                           bool bitReverse = false);
 
-    static std::vector<Poly> EncryptCoeffWithZeroB(const BigInteger& Q, const DCRTPoly a,
-                                                   const std::shared_ptr<ILDCRTParams<DCRTPoly::Integer>>& ep);
+    static std::vector<Poly> EncryptCoeffWithZeroB(const BigInteger& Q, DCRTPoly a);
 
     static std::vector<int64_t> DecryptCoeff(const std::vector<Poly>& input, const BigInteger& Q, const BigInteger& p,
                                              const PrivateKey<DCRTPoly>& privateKey,
