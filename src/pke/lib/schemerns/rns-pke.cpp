@@ -107,6 +107,24 @@ DecryptResult PKERNS::Decrypt(ConstCiphertext<DCRTPoly> ciphertext, const Privat
     return DecryptResult(plaintext->GetLength());
 }
 
+Ciphertext<DCRTPoly> PKERNS::EncryptWithZeroC0(const DCRTPoly& c1) const {
+    if (c1.GetParams() == nullptr) {
+        OPENFHE_THROW("c1 must have parameter metadata.");
+    }
+
+    DCRTPoly zeroC0(c1);
+    zeroC0.SetValuesToZero();
+    zeroC0.SetFormat(Format::EVALUATION);
+
+    DCRTPoly c1Eval(c1);
+    c1Eval.SetFormat(Format::EVALUATION);
+
+    auto ciphertext = std::make_shared<CiphertextImpl<DCRTPoly>>();
+    ciphertext->SetElements({std::move(zeroC0), std::move(c1Eval)});
+    ciphertext->SetNoiseScaleDeg(1);
+    return ciphertext;
+}
+
 std::shared_ptr<std::vector<DCRTPoly>> PKERNS::EncryptZeroCore(const PrivateKey<DCRTPoly> privateKey,
                                                                const std::shared_ptr<ParmType> params) const {
     const auto cryptoParams = std::dynamic_pointer_cast<CryptoParametersRNS>(privateKey->GetCryptoParameters());

@@ -198,6 +198,35 @@ std::vector<Poly> SchemeletRLWEMP::EncryptCoeff(std::vector<int64_t> input, cons
     return {bPoly += mPoly, aPoly};
 }
 
+std::vector<Poly> SchemeletRLWEMP::EncryptCoeffWithZeroB(const BigInteger& Q, DCRTPoly a) {
+    DCRTPoly b = a - a;
+
+    a.SetFormat(Format::COEFFICIENT);
+    auto aPoly = a.CRTInterpolate();
+    b.SetFormat(Format::COEFFICIENT);
+    auto bPoly = b.CRTInterpolate();
+
+    BigInteger bigQPrime = b.GetModulus();
+
+    // Do modulus switching from Q' to Q
+    if (Q < bigQPrime) {
+        bPoly = bPoly.MultiplyAndRound(Q, bigQPrime);
+        bPoly.SwitchModulus(Q, 1, 0, 0);
+
+        aPoly = aPoly.MultiplyAndRound(Q, bigQPrime);
+        aPoly.SwitchModulus(Q, 1, 0, 0);
+    }
+    else {
+        bPoly.SwitchModulus(Q, 1, 0, 0);
+        bPoly = bPoly.MultiplyAndRound(Q, bigQPrime);
+
+        aPoly.SwitchModulus(Q, 1, 0, 0);
+        aPoly = aPoly.MultiplyAndRound(Q, bigQPrime);
+    }
+
+    return {bPoly, aPoly};
+}
+
 std::vector<int64_t> SchemeletRLWEMP::DecryptCoeff(const std::vector<Poly>& input, const BigInteger& Q,
                                                    const BigInteger& p, const PrivateKey<DCRTPoly>& privateKey,
                                                    const std::shared_ptr<ILDCRTParams<DCRTPoly::Integer>>& ep,
@@ -236,6 +265,53 @@ std::vector<int64_t> SchemeletRLWEMP::DecryptCoeff(const std::vector<Poly>& inpu
     for (uint32_t i = 0, idx = 0; i < length; ++i, idx += gap)
         output[i] =
             (mPoly[idx] > half) ? -(p - mPoly[idx]).ConvertToInt<int64_t>() : mPoly[idx].ConvertToInt<int64_t>();
+
+    if (bitReverse) {
+        if (numSlots < length) {
+            BitReverseTwoHalves(output);
+        }
+        else {
+            BitReverse(output);
+        }
+    }
+
+    return output;
+}
+
+std::vector<int64_t> SchemeletRLWEMP::DecryptCoeffWithoutRound(
+    const std::vector<Poly>& input, const BigInteger& Q, const PrivateKey<DCRTPoly>& privateKey,
+    const std::shared_ptr<ILDCRTParams<DCRTPoly::Integer>>& ep, uint32_t numSlots, uint32_t length, bool bitReverse) {
+    const auto& bigQPrime = ep->GetModulus();
+
+    auto ba = (Q < bigQPrime) ? ModSwitchUp(input, Q, bigQPrime, ep) : ModSwitchDown(input, Q, bigQPrime, ep);
+
+    auto scopy(privateKey->GetPrivateElement());
+    scopy.DropLastElements(scopy.GetParams()->GetParams().size() - ep->GetParams().size());
+
+    auto m = ba[0] + ba[1] * scopy;
+
+    m.SetFormat(Format::COEFFICIENT);
+
+    auto mPoly   = m.CRTInterpolate();
+    uint32_t gap = mPoly.GetLength() / (2 * numSlots);
+
+    if (Q < bigQPrime) {
+        mPoly = mPoly.MultiplyAndRound(Q, bigQPrime);
+        mPoly.SwitchModulus(Q, 1, 0, 0);
+    }
+    else {
+        mPoly.SwitchModulus(Q, 1, 0, 0);
+        mPoly = mPoly.MultiplyAndRound(Q, bigQPrime);
+    }
+
+    BigInteger half = Q >> 1;
+
+    length = (length == 0) ? numSlots : length;
+
+    std::vector<int64_t> output(length);
+    for (uint32_t i = 0, idx = 0; i < length; ++i, idx += gap)
+        output[i] =
+            (mPoly[idx] > half) ? -(Q - mPoly[idx]).ConvertToInt<int64_t>() : mPoly[idx].ConvertToInt<int64_t>();
 
     if (bitReverse) {
         if (numSlots < length) {
