@@ -120,9 +120,9 @@ public:
    * @param a field element in DFT format
    * @param b field element in DFT format
    * @param d field element in DFT format
-   * @param c a vector of field elements in Coefficient format
+   * @param c a vector/matrix of field elements in Coefficient format
    * @param dgg discrete Gaussian generator
-   * @param p non-spherical perturbation vector; output of the function
+   * @param p non-spherical perturbation vector/matrix; output of the function
    */
     static void ZSampleSigma2x2(const Field2n& a, const Field2n& b, const Field2n& d, const Matrix<Field2n>& c,
                                 const typename Element::DggType& dgg, std::shared_ptr<Matrix<int64_t>> p);

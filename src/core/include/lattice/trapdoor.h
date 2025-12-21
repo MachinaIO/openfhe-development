@@ -452,22 +452,32 @@ public:
 
         Matrix<Element> p1(zero_alloc, 1, 1);
 
-        for (size_t j = 0; j < d; j++) {
-            Matrix<Field2n> c([&]() { return Field2n(n, Format::COEFFICIENT); }, 2 * d, 1);
+        Matrix<Field2n> c([&]() { return Field2n(n, Format::COEFFICIENT); }, 2 * d, d);
+        double cScale = -sigma * sigma / (s * s - sigma * sigma);
 
+#pragma omp parallel for if (d > 1)
+        for (long jL = 0; jL < static_cast<long>(d); ++jL) {
+            size_t j = static_cast<size_t>(jL);
             for (size_t i = 0; i < d; i++) {
-                c(i, 0)     = Field2n(Tp2(i, j)).ScalarMult(-sigma * sigma / (s * s - sigma * sigma));
-                c(i + d, 0) = Field2n(Tp2(i + d, j)).ScalarMult(-sigma * sigma / (s * s - sigma * sigma));
+                c(i, j)     = Field2n(Tp2(i, j)).ScalarMult(cScale);
+                c(i + d, j) = Field2n(Tp2(i + d, j)).ScalarMult(cScale);
             }
+        }
 
-            auto p1ZVector = std::make_shared<Matrix<int64_t>>([]() { return 0; }, n * 2 * d, 1);
+        auto p1ZVector = std::make_shared<Matrix<int64_t>>([]() { return 0; }, n * 2 * d, d);
 
-            LatticeGaussSampUtility<Element>::SampleMat(AF, BF, DF, c, dgg, p1ZVector);
+        LatticeGaussSampUtility<Element>::SampleMat(AF, BF, DF, c, dgg, p1ZVector);
 
-            if (j == 0)
-                p1 = SplitInt64IntoElements<Element>(*p1ZVector, n, params);
-            else
-                p1.HStack(SplitInt64IntoElements<Element>(*p1ZVector, n, params));
+        std::vector<Matrix<Element>> p1Cols(d);
+#pragma omp parallel for if (d > 1)
+        for (long jL = 0; jL < static_cast<long>(d); ++jL) {
+            size_t j  = static_cast<size_t>(jL);
+            p1Cols[j] = SplitInt64IntoElements<Element>(p1ZVector->ExtractCol(j), n, params);
+        }
+        if (d > 0) {
+            p1 = p1Cols[0];
+            for (size_t j = 1; j < d; ++j)
+                p1.HStack(p1Cols[j]);
         }
 
         p1.SetFormat(Format::EVALUATION);

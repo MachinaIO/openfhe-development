@@ -265,7 +265,7 @@ void LatticeGaussSampUtility<Element>::SampleC(const Matrix<double>& c, size_t k
 
 // Subroutine used by ZSampleSigmaP as described Algorithm 4 in
 // https://eprint.iacr.org/2017/844.pdf a - field element in DFT format b -
-// field element in DFT format d - field element in DFT format c - vector of
+// field element in DFT format d - field element in DFT format c - vector/matrix of
 // field elements in Format::COEFFICIENT format
 template <class Element>
 void LatticeGaussSampUtility<Element>::ZSampleSigma2x2(const Field2n& a, const Field2n& b, const Field2n& d,
@@ -273,34 +273,48 @@ void LatticeGaussSampUtility<Element>::ZSampleSigma2x2(const Field2n& a, const F
                                                        std::shared_ptr<Matrix<int64_t>> q) {
     // size of the the lattice
     size_t n = a.Size();
+    size_t cCols = c.GetCols();
+
+    if (q->GetRows() != 2 * n || q->GetCols() != cCols) {
+        *q = Matrix<int64_t>([]() { return 0; }, 2 * n, cCols);
+    }
 
     Field2n dCoeff = d;
     dCoeff.SetFormat(Format::COEFFICIENT);
 
-    std::shared_ptr<Matrix<int64_t>> q2Int = ZSampleF(dCoeff, c(1, 0), dgg, n);
-    Field2n q2(*q2Int);
+    Field2n dInv  = d.Inverse();
+    Field2n bDinv = b * dInv;
 
-    Field2n q2Minusc2 = q2 - c(1, 0);
-    // Convert to DFT representation prior to multiplication
-    q2Minusc2.SwitchFormat();
-
-    Field2n product = b * d.Inverse() * q2Minusc2;
-    product.SetFormat(Format::COEFFICIENT);
-
-    // Computes c1 in Format::COEFFICIENT format
-    Field2n c1 = c(0, 0) + product;
-
-    Field2n f = a - b * d.Inverse() * b.Transpose();
+    Field2n f = a - b * dInv * b.Transpose();
     f.SetFormat(Format::COEFFICIENT);
 
-    std::shared_ptr<Matrix<int64_t>> q1Int = ZSampleF(f, c1, dgg, n);
+#if defined(WITH_OPENMP) && !defined(FIXED_SEED)
+#pragma omp parallel for if (cCols > 1)
+#endif
+    for (long colL = 0; colL < static_cast<long>(cCols); ++colL) {
+        size_t col = static_cast<size_t>(colL);
+        std::shared_ptr<Matrix<int64_t>> q2Int = ZSampleF(dCoeff, c(1, col), dgg, n);
+        Field2n q2(*q2Int);
 
-    for (size_t i = 0; i < q1Int->GetRows(); i++) {
-        (*q)(i, 0) = (*q1Int)(i, 0);
-    }
+        Field2n q2Minusc2 = q2 - c(1, col);
+        // Convert to DFT representation prior to multiplication
+        q2Minusc2.SwitchFormat();
 
-    for (size_t i = 0; i < q2Int->GetRows(); i++) {
-        (*q)(i + q1Int->GetRows(), 0) = (*q2Int)(i, 0);
+        Field2n product = bDinv * q2Minusc2;
+        product.SetFormat(Format::COEFFICIENT);
+
+        // Computes c1 in Format::COEFFICIENT format
+        Field2n c1 = c(0, col) + product;
+
+        std::shared_ptr<Matrix<int64_t>> q1Int = ZSampleF(f, c1, dgg, n);
+
+        for (size_t i = 0; i < q1Int->GetRows(); i++) {
+            (*q)(i, col) = (*q1Int)(i, 0);
+        }
+
+        for (size_t i = 0; i < q2Int->GetRows(); i++) {
+            (*q)(i + q1Int->GetRows(), col) = (*q2Int)(i, 0);
+        }
     }
 }
 
@@ -313,6 +327,7 @@ void LatticeGaussSampUtility<Element>::SampleMat(const Matrix<Field2n>& A, const
                                                  const typename Element::DggType& dgg,
                                                  std::shared_ptr<Matrix<int64_t>> p) {
     size_t d = C.GetRows();
+    size_t cCols = C.GetCols();
 
     if (d == 2) {
         ZSampleSigma2x2(A(0, 0), B(0, 0), D(0, 0), C, dgg, p);
@@ -324,23 +339,32 @@ void LatticeGaussSampUtility<Element>::SampleMat(const Matrix<Field2n>& A, const
     size_t dimA = A.GetRows();
     size_t dimD = D.GetRows();
 
-    auto q1 = std::make_shared<Matrix<int64_t>>([]() { return 0; }, n * dimD, 1);
-    Matrix<Field2n> c0([]() { return Field2n(Format::COEFFICIENT); }, dimA, 1);
-    Matrix<Field2n> c1([]() { return Field2n(Format::COEFFICIENT); }, dimD, 1);
-    Matrix<Field2n> qF1([]() { return Field2n(Format::COEFFICIENT); }, dimD, 1);
+    auto q1 = std::make_shared<Matrix<int64_t>>([]() { return 0; }, n * dimD, cCols);
+    Matrix<Field2n> c0([]() { return Field2n(Format::COEFFICIENT); }, dimA, cCols);
+    Matrix<Field2n> c1([]() { return Field2n(Format::COEFFICIENT); }, dimD, cCols);
+    Matrix<Field2n> qF1([]() { return Field2n(Format::COEFFICIENT); }, dimD, cCols);
 
     Matrix<Field2n> Dinverse([]() { return Field2n(Format::EVALUATION); }, dimD, dimD);
 
     if (dimD == 1) {
         Field2n dEval = D(0, 0);
         dEval.SetFormat(Format::COEFFICIENT);
-        c1(0, 0) = C(d - 1, 0);
-        c0       = C.ExtractRows(0, d - 2);
-        q1       = ZSampleF(dEval, c1(0, 0), dgg, dEval.Size());
+        c1 = C.ExtractRows(dimA, d - 1);
+        c0 = C.ExtractRows(0, dimA - 1);
+
+#if defined(WITH_OPENMP) && !defined(FIXED_SEED)
+#pragma omp parallel for if (cCols > 1)
+#endif
+        for (long colL = 0; colL < static_cast<long>(cCols); ++colL) {
+            size_t col = static_cast<size_t>(colL);
+            auto q1Col = ZSampleF(dEval, c1(0, col), dgg, dEval.Size());
+            for (size_t i = 0; i < q1Col->GetRows(); ++i) {
+                (*q1)(i, col) = (*q1Col)(i, 0);
+            }
+            qF1(0, col) = Field2n(*q1Col);
+        }
 
         Dinverse(0, 0) = D(0, 0).Inverse();
-
-        qF1(0, 0) = Field2n(*q1);
     }
     else if (dimD == 2) {  // dimD == 2
         c1 = C.ExtractRows(dimA, d - 1);
@@ -348,8 +372,19 @@ void LatticeGaussSampUtility<Element>::SampleMat(const Matrix<Field2n>& A, const
 
         ZSampleSigma2x2(D(0, 0), D(0, 1), D(1, 1), c1, dgg, q1);
 
-        for (size_t i = 0; i < dimD; i++)
-            qF1(i, 0) = Field2n(q1->ExtractRows(i * n, i * n + n - 1));
+        // convert q1 into field elements for all columns
+#pragma omp parallel for if (cCols > 1)
+        for (long colL = 0; colL < static_cast<long>(cCols); ++colL) {
+            size_t col = static_cast<size_t>(colL);
+            for (size_t i = 0; i < dimD; i++) {
+                Matrix<int64_t> q1Slice([]() { return 0; }, n, 1);
+                size_t base = i * n;
+                for (size_t r = 0; r < n; ++r) {
+                    q1Slice(r, 0) = (*q1)(base + r, col);
+                }
+                qF1(i, col) = Field2n(q1Slice);
+            }
+        }
 
         Field2n det        = D(0, 0) * D(1, 1) - D(0, 1) * D(1, 0);
         Field2n detInverse = det.Inverse();
@@ -384,8 +419,19 @@ void LatticeGaussSampUtility<Element>::SampleMat(const Matrix<Field2n>& A, const
 
         SampleMat(newA, newB, newD, c1, dgg, q1);
 
-        for (size_t i = 0; i < dimD; i++)
-            qF1(i, 0) = Field2n(q1->ExtractRows(i * n, i * n + n - 1));
+        // convert q1 into field elements for all columns
+#pragma omp parallel for if (cCols > 1)
+        for (long colL = 0; colL < static_cast<long>(cCols); ++colL) {
+            size_t col = static_cast<size_t>(colL);
+            for (size_t i = 0; i < dimD; i++) {
+                Matrix<int64_t> q1Slice([]() { return 0; }, n, 1);
+                size_t base = i * n;
+                for (size_t r = 0; r < n; ++r) {
+                    q1Slice(r, 0) = (*q1)(base + r, col);
+                }
+                qF1(i, col) = Field2n(q1Slice);
+            }
+        }
 
         // Compute Dinverse in O(n^3) using LU decomposition with partial pivoting.
         // We solve A X = I by first computing L and U (with row permutations),
@@ -528,7 +574,7 @@ void LatticeGaussSampUtility<Element>::SampleMat(const Matrix<Field2n>& A, const
         for (size_t j = 0; j < newDimD; j++)
             newD(i, j) = sigma(i + newDimA, j + newDimA);
 
-    auto q0 = std::make_shared<Matrix<int64_t>>([]() { return 0; }, n * dimA, 1);
+    auto q0 = std::make_shared<Matrix<int64_t>>([]() { return 0; }, n * dimA, cCols);
     SampleMat(newA, newB, newD, cNew, dgg, q0);
 
     *p = *q0;
